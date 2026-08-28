@@ -1,0 +1,17 @@
+node_modules/
+_workspace/
+/Repository/
+/Versions/
+vendor-cache/
+dist/
+artifacts/
+release/
+validation/
+acceptance/
+references_private/
+VoxelQR_Garden_FINAL_HANDOFF_v6.0_20260824.zip
+playwright-report/
+test-results/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,23 @@
+appId: app.voxelqr.studio
+productName: VoxelQR Studio
+copyright: Copyright © 2026 VoxelQR Studio contributors
+directories:
+  output: _workspace/build/windows-dev
+files:
+  - _workspace/build/desktop/**/*
+  - electron/**/*
+  - package.json
+asar: true
+electronDist: node_modules/electron/dist
+win:
+  signAndEditExecutable: true
+  signExecutable: false
+  target:
+    - target: dir
+      arch:
+        - x64
+  executableName: VoxelQR-Studio
+artifactName: VoxelQR-Studio-${version}-${arch}-${ext}
+electronLanguages:
+  - en-US
+  - zh-TW
