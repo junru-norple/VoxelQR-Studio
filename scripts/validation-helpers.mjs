@@ -5,20 +5,32 @@ import http from 'node:http';
 import path from 'node:path';
 import jsQR from 'jsqr';
 import { PNG } from 'pngjs';
+import {
+  assertIncidentRootsAbsent,
+  assertPathInside,
+  assertR6ProcessEnvironment,
+  hostProjectRoot,
+  resolveInsideProject,
+  sourceRoot,
+  workspaceRoot as containedWorkspaceRoot,
+} from './root-containment.mjs';
 
-export const projectRoot = path.resolve(import.meta.dirname, '..');
-export const workspaceRoot = path.join(projectRoot, '_workspace');
-export const buildRoot = path.join(workspaceRoot, 'build');
-export const acceptanceRoot = path.join(workspaceRoot, 'acceptance');
-export const validationVersion = process.env.VOXELQR_VALIDATION_VERSION ?? 'v8.0';
-export const validationRoot = path.join(workspaceRoot, 'validation', validationVersion);
-export const previewRoot = path.join(workspaceRoot, 'evidence', validationVersion, 'runtime');
+export const projectRoot = sourceRoot;
+export const workspaceRoot = containedWorkspaceRoot;
+export const validationVersion = process.env.VOXELQR_VALIDATION_VERSION ?? 'v1.1.0-r6';
+export const buildRoot = resolveInsideProject(path.join(workspaceRoot, 'build', validationVersion), 'BUILD_ROOT');
+export const acceptanceRoot = resolveInsideProject(path.join(workspaceRoot, 'acceptance'), 'ACCEPTANCE_ROOT');
+export const validationRoot = resolveInsideProject(path.join(workspaceRoot, 'validation', validationVersion), 'VALIDATION_ROOT');
+export const previewRoot = resolveInsideProject(path.join(workspaceRoot, 'evidence', validationVersion, 'runtime'), 'PREVIEW_ROOT');
+export const projectHostRoot = hostProjectRoot;
+export const r6ProcessEnvironment = assertR6ProcessEnvironment();
+export const incidentRootState = assertIncidentRootsAbsent();
 const programFilesRoot = process.env.ProgramFiles
   ?? process.env.PROGRAMFILES
   ?? path.join(path.parse(process.cwd()).root, 'Program Files');
 export const chromePath = process.env.CHROME_PATH
   ?? path.join(programFilesRoot, 'Google', 'Chrome', 'Application', 'chrome.exe');
-export const themes = ['sakura', 'summer', 'maple', 'ginkgo', 'snow', 'sunset', 'ocean', 'wanderer'];
+export const themes = ['sakura', 'summer', 'maple', 'ginkgo', 'snow', 'sunset', 'ocean', 'wanderer', 'kitty'];
 export const payloadCases = [
   { name: 'short-url', type: 'url', payload: 'https://example.com' },
   { name: 'long-url', type: 'url', payload: 'https://example.com/garden/voxel/seasonal/collection/2026/details?source=portfolio&medium=qr' },
@@ -50,7 +62,7 @@ export async function ensureEvidenceDirs() {
 }
 
 export async function writeEvidence(name, value) {
-  const target = path.join(validationRoot, name);
+  const target = assertPathInside(validationRoot, path.join(validationRoot, name), 'EVIDENCE_TARGET');
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
   return target;
@@ -102,7 +114,7 @@ export function resourcesEqual(a, b) {
 }
 
 export async function createStaticServer(rootDirectory) {
-  const root = path.resolve(rootDirectory);
+  const root = resolveInsideProject(rootDirectory, 'STATIC_SERVER_ROOT');
   const contentTypes = new Map([
     ['.html', 'text/html; charset=utf-8'], ['.js', 'text/javascript; charset=utf-8'], ['.css', 'text/css; charset=utf-8'],
     ['.png', 'image/png'], ['.svg', 'image/svg+xml'], ['.json', 'application/json; charset=utf-8'],
@@ -111,11 +123,9 @@ export async function createStaticServer(rootDirectory) {
     try {
       const rawPath = decodeURIComponent(new URL(request.url ?? '/', 'http://127.0.0.1').pathname);
       const relative = rawPath === '/' ? 'index.html' : rawPath.replace(/^\/+/, '');
-      const target = path.resolve(root, relative);
-      if (!target.startsWith(root)) {
-        response.writeHead(403).end('Forbidden');
-        return;
-      }
+      let target;
+      try { target = assertPathInside(root, path.resolve(root, relative), 'STATIC_SERVER_TARGET'); }
+      catch { response.writeHead(403).end('Forbidden'); return; }
       const metadata = await stat(target);
       const file = metadata.isDirectory() ? path.join(target, 'index.html') : target;
       const contentType = contentTypes.get(path.extname(file).toLowerCase()) ?? 'application/octet-stream';

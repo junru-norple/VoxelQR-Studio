@@ -1,4 +1,4 @@
-VoxelQR Studio v1.0.0
+VoxelQR Studio v1.1.0
 3D 動態體素 QR Code 生成器
 
 Windows:

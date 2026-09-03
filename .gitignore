@@ -9,6 +9,13 @@ release/
 validation/
 acceptance/
 references_private/
+private_reference/
+Plans/
+VoxelQR_Studio_v*_升級計畫書_*.txt
+VoxelQR_Studio_v*_CODEX_PROMPT_*.txt
+README_FIRST_ACTION_*.txt
+SHA256SUMS_R2.txt
+scripts/Sync-VoxelQR-Public.ps1
 VoxelQR_Garden_FINAL_HANDOFF_v6.0_20260824.zip
 playwright-report/
 test-results/

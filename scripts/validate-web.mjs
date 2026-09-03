@@ -89,7 +89,7 @@ try {
   assert(liveStats.liveInputP95Ms <= 100, `LIVE_INPUT: p95 ${liveStats.liveInputP95Ms.toFixed(2)}ms exceeds 100ms`);
   assert(liveStats.payload === 'https://example.com/live-switch', 'LIVE_INPUT: final scene payload is stale');
 
-  // Eight real theme previews from the one persistent scene.
+  // Nine real theme previews from the one persistent scene.
   const previewPayload = 'https://example.com/voxelqr-final-preview';
   await setPayloadAndWait(page, previewPayload, 'url');
   for (let index = 0; index < themes.length; index += 1) {
@@ -103,6 +103,68 @@ try {
     assert(decodePng(scan) === previewPayload, `WEB_QR_RUNTIME preview: ${theme} same-scene frame did not decode`);
     await page.screenshot({ path: path.join(previewRoot, `${String(index + themes.length + 1).padStart(2, '0')}-${theme}-scan.png`) });
   }
+
+  // R6 Kitty captures intent, steering, visitation history and RNG state at
+  // the exact Scan edge, hides every Kitty renderable before decode, and
+  // restores that state exactly.
+  await page.evaluate(() => window.__VOXELQR_TEST__.setTheme('kitty'));
+  await setSceneAndWait(page);
+  await page.waitForFunction(() => Boolean(window.__VOXELQR_TEST__.getKittyMotionSample().pose?.moving), undefined, { timeout: 5_000 });
+  const kittyEngage = await page.evaluate(() => {
+    const before = window.__VOXELQR_TEST__.getKittyMotionSample();
+    window.__VOXELQR_TEST__.setMode('scan');
+    const after = window.__VOXELQR_TEST__.getKittyMotionSample();
+    return { before, after };
+  });
+  assert(kittyEngage.before.motionModel === 'session-seeded-natural-lively-v1', 'R6_KITTY_MOTION_MODEL: production model mismatch');
+  assert(kittyEngage.before.productionSessionFreshSeed && kittyEngage.before.seedSource === 'production-crypto', 'R6_KITTY_PRODUCTION_SEED: crypto session seed missing');
+  assert(Object.values(kittyEngage.before.loopPolicy).every((value) => value === false), 'R6_KITTY_LOOP_POLICY: finite/fixed loop policy enabled');
+  assert(!Object.hasOwn(kittyEngage.before, 'plan'), 'R6_KITTY_FIXED_PLAN: production motion still exposes a route plan');
+  assert(kittyEngage.before.clockSeconds === kittyEngage.after.clockSeconds, 'KITTY_SCAN_FREEZE: clock advanced during engagement');
+  assert(kittyEngage.before.pose?.moving === true, 'KITTY_MOVING_SCAN_CUT: Scan was not requested during a moving pose');
+  assert(JSON.stringify(kittyEngage.before.pose) === JSON.stringify(kittyEngage.after.pose), 'KITTY_SCAN_FREEZE: pose changed during engagement');
+  assert(JSON.stringify(kittyEngage.before.originalColorPalette) === JSON.stringify(kittyEngage.after.originalColorPalette), 'KITTY_SCAN_FREEZE: original colors changed during engagement');
+  assert(JSON.stringify(kittyEngage.before.originalColorPalette) === JSON.stringify(kittyEngage.before.renderedColorPalette), 'KITTY_SCAN_COLOR: rendered colors differ before engagement');
+  assert(kittyEngage.after.scanHidden && !kittyEngage.after.renderVisible, 'KITTY_SCAN_HIDE: group remained visible at engagement');
+  assert(!kittyEngage.after.bodyMeshVisible && !kittyEngage.after.darkCapsVisible && !kittyEngage.after.lightCapsVisible, 'KITTY_SCAN_HIDE: a Kitty mesh remained effectively visible');
+  assert(kittyEngage.after.renderedColorPalette.length === 0, 'KITTY_SCAN_HIDE: hidden Kitty still reports rendered colors');
+  await page.waitForFunction(() => window.__VOXELQR_TEST__.getStats().progress >= 0.999, undefined, { timeout: 10_000 });
+  const kittyZeroDiff = await page.evaluate(() => window.__VOXELQR_TEST__.measureKittyScanNoCatPixelDiff());
+  assert(kittyZeroDiff.diff.exact, `KITTY_SCAN_ZERO_DIFF: ${JSON.stringify(kittyZeroDiff.diff)}`);
+  assert(kittyZeroDiff.diff.fullFrameDifferentPixels === 0 && kittyZeroDiff.diff.qrRoiDifferentPixels === 0, 'KITTY_SCAN_ZERO_DIFF: full-frame or QR ROI differs from no-cat baseline');
+  assert(kittyZeroDiff.scanAttachedHidden.groupPresent && !kittyZeroDiff.scanAttachedHidden.groupVisible, 'KITTY_SCAN_ZERO_DIFF: attached Kitty group state is invalid');
+  assert(kittyZeroDiff.scanAttachedHidden.effectivelyVisibleMeshCount === 0, 'KITTY_SCAN_ZERO_DIFF: visible Kitty mesh count is not zero');
+  assert(Object.values(kittyZeroDiff.scanAttachedHidden.matricesStable).every(Boolean), 'KITTY_SCAN_ZERO_DIFF: frozen matrices drifted');
+  assert(kittyZeroDiff.restoration.resourcesExact && kittyZeroDiff.restoration.cameraExact && kittyZeroDiff.restoration.snapshotClockUnchanged, 'KITTY_SCAN_ZERO_DIFF: measurement mutated runtime state');
+  assert(kittyZeroDiff.restoration.groupIndexBefore === kittyZeroDiff.restoration.groupIndexAfter, 'KITTY_SCAN_ZERO_DIFF: Kitty group order changed');
+  assert(kittyZeroDiff.restoration.sceneObjectCountBefore === kittyZeroDiff.restoration.sceneObjectCountAfter, 'KITTY_SCAN_ZERO_DIFF: scene object count changed');
+  const kittyFrozenFirst = await page.evaluate(() => window.__VOXELQR_TEST__.getKittyMotionSample());
+  await page.waitForTimeout(620);
+  const kittyFrozenSecond = await page.evaluate(() => window.__VOXELQR_TEST__.getKittyMotionSample());
+  assert(kittyFrozenFirst.frozen && kittyFrozenSecond.frozen, 'KITTY_SCAN_FREEZE: frozen proof flag missing');
+  assert(kittyFrozenFirst.scanHidden && kittyFrozenSecond.scanHidden, 'KITTY_SCAN_HIDE: hidden proof flag missing');
+  assert(!kittyFrozenFirst.renderVisible && !kittyFrozenSecond.renderVisible, 'KITTY_SCAN_HIDE: Kitty became visible while frozen');
+  assert(kittyFrozenFirst.clockSeconds === kittyFrozenSecond.clockSeconds, 'KITTY_SCAN_FREEZE: clock advanced while in Scan');
+  assert(JSON.stringify(kittyFrozenFirst.pose) === JSON.stringify(kittyFrozenSecond.pose), 'KITTY_SCAN_FREEZE: pose moved while in Scan');
+  assert(JSON.stringify(kittyFrozenFirst.originalColorPalette) === JSON.stringify(kittyFrozenSecond.originalColorPalette), 'KITTY_SCAN_FREEZE: palette changed while in Scan');
+  assert(kittyFrozenFirst.renderedColorPalette.length === 0 && kittyFrozenSecond.renderedColorPalette.length === 0, 'KITTY_SCAN_HIDE: frozen rendered palette is not empty');
+  assert(JSON.stringify(kittyFrozenFirst.snapshot) === JSON.stringify(kittyFrozenSecond.snapshot), 'KITTY_SCAN_FREEZE: complete snapshot changed while in Scan');
+  for (const key of ['sessionSeed', 'intent', 'steering', 'heatmap', 'recentTargets', 'rngState']) {
+    assert(JSON.stringify(kittyFrozenFirst[key]) === JSON.stringify(kittyFrozenFirst.snapshot[key]), `R6_KITTY_SCAN_SNAPSHOT: ${key} was not captured exactly`);
+  }
+  assert(decodePng(await canvasFrame(page)) === previewPayload, 'KITTY_SCAN_FREEZE: frozen runtime frame does not decode');
+  await setSceneAndWait(page);
+  await page.waitForTimeout(260);
+  const kittyResumed = await page.evaluate(() => window.__VOXELQR_TEST__.getKittyMotionSample());
+  assert(kittyResumed.renderVisible && !kittyResumed.scanHidden, 'KITTY_SCAN_RESTORE: Kitty did not become visible in Explore');
+  assert(kittyResumed.lastRestore?.clockExact && kittyResumed.lastRestore?.poseExact
+    && kittyResumed.lastRestore?.intentExact && kittyResumed.lastRestore?.steeringExact
+    && kittyResumed.lastRestore?.heatmapExact && kittyResumed.lastRestore?.recentTargetsExact
+    && kittyResumed.lastRestore?.rngStateExact, 'KITTY_SCAN_RESTORE: complete R6 behavior state was not restored exactly');
+  assert(kittyResumed.lastRestore?.bodyMatricesExact && kittyResumed.lastRestore?.darkCapMatricesExact
+    && kittyResumed.lastRestore?.lightCapMatricesExact && kittyResumed.lastRestore?.particleMatricesExact
+    && kittyResumed.lastRestore?.seedExact, 'KITTY_SCAN_RESTORE: matrices or seed were not restored exactly');
+  assert(kittyResumed.clockSeconds > kittyFrozenSecond.clockSeconds, 'KITTY_SCAN_RESUME: clock did not resume from frozen pose');
 
   // Camera continuity, color invariance, animation continuity, and exact return.
   await page.evaluate(() => window.__VOXELQR_TEST__.setTheme('sakura'));
@@ -124,7 +186,7 @@ try {
     await page.waitForTimeout(70);
     const stats = await page.evaluate(() => window.__VOXELQR_TEST__.getStats());
     if (capturedTransitions < transitionThresholds.length && stats.progress >= transitionThresholds[capturedTransitions]) {
-      await page.screenshot({ path: path.join(previewRoot, `${String(17 + capturedTransitions).padStart(2, '0')}-transition-${capturedTransitions + 1}.png`) });
+      await page.screenshot({ path: path.join(previewRoot, `${String(themes.length * 2 + 1 + capturedTransitions).padStart(2, '0')}-transition-${capturedTransitions + 1}.png`) });
       capturedTransitions += 1;
     }
     if (stats.progress >= 0.999) break;
@@ -148,7 +210,7 @@ try {
   const returnError = cameraStateDistance(beforeTransition.camera, afterReturn.camera);
   assert(returnError.position < 0.002 && returnError.target < 0.002 && returnError.quaternion < 0.002 && returnError.zoom < 0.002, `CAMERA_RETURN: ${JSON.stringify(returnError)}`);
 
-  // QR_DECODE_GATE: 8 themes × 8 payload classes from the colored WebGL canvas itself.
+  // QR_DECODE_GATE: 9 themes × 8 payload classes from the colored WebGL canvas itself.
   const staticDecodeTotal = themes.length * payloadCases.length;
   const animatedDecodeTotal = themes.length * 3;
   let staticDecoded = 0;
@@ -180,18 +242,40 @@ try {
       hashes.push(sha256(frame));
       animatedDecoded += 1;
     }
-    assert(new Set(hashes).size >= 2, `SCAN_ANIMATION_CONTINUITY: ${theme} frames are visually static`);
+    const uniqueFrameCount = new Set(hashes).size;
+    if (theme === 'kitty') {
+      assert(kittyFrozenFirst.clockSeconds === kittyFrozenSecond.clockSeconds
+        && JSON.stringify(kittyFrozenFirst.pose) === JSON.stringify(kittyFrozenSecond.pose), 'KITTY_SCAN_FREEZE: exact pose proof was lost during animated decode');
+      const currentKittyScan = await page.evaluate(() => window.__VOXELQR_TEST__.getKittyMotionSample());
+      assert(currentKittyScan.scanHidden && !currentKittyScan.renderVisible && currentKittyScan.renderedColorPalette.length === 0, 'KITTY_SCAN_HIDE: Kitty renderables returned during animated decode');
+    } else {
+      assert(uniqueFrameCount >= 2, `SCAN_ANIMATION_CONTINUITY: ${theme} frames are visually static`);
+    }
     animatedHashes[theme] = hashes;
   }
   assert(animatedDecoded === animatedDecodeTotal, `SCAN_ANIMATED_DECODE: expected ${animatedDecodeTotal}, got ${animatedDecoded}`);
 
   // Pointer reliability and real 15-second continuous interaction performance.
   // Automatic fidelity fallback: only atmosphere density changes; hero and QR resolution stay invariant.
-  const fallbackBefore = await page.evaluate(() => window.__VOXELQR_TEST__.getStats());
-  await page.evaluate(() => {
-    for (let frame = 0; frame < 90; frame += 1) window.__VOXELQR_TEST__.sampleFidelityFrame(23);
+  // Run the hysteresis proof from a fresh runtime and first prove the exact
+  // 300-frame recovery edge, so earlier QR/export workloads cannot contaminate
+  // the controlled counter state.
+  await page.reload({ waitUntil: 'networkidle' });
+  await waitForGarden(page);
+  await page.evaluate(() => window.__VOXELQR_TEST__.setTheme('ocean'));
+  await setPayloadAndWait(page, animatedPayload, 'text');
+  await setScanAndWait(page);
+  const fallbackWarmup = await page.evaluate(() => {
+    const start = window.__VOXELQR_TEST__.getStats();
+    for (let frame = 0; frame < 300; frame += 1) window.__VOXELQR_TEST__.sampleFidelityFrame(16);
+    return { start: start.performance, recovered: window.__VOXELQR_TEST__.getStats().performance };
   });
-  const fallbackReduced = await page.evaluate(() => window.__VOXELQR_TEST__.getStats());
+  assert(fallbackWarmup.recovered.fidelityLevel === 'high', `FIDELITY_WARMUP_NOT_HIGH:${JSON.stringify(fallbackWarmup)}`);
+  const fallbackBefore = await page.evaluate(() => window.__VOXELQR_TEST__.getStats());
+  const fallbackReduced = await page.evaluate(() => {
+    for (let frame = 0; frame < 90; frame += 1) window.__VOXELQR_TEST__.sampleFidelityFrame(23);
+    return window.__VOXELQR_TEST__.getStats();
+  });
   assert(fallbackReduced.performance.fidelityLevel === 'reduced-atmosphere', `FIDELITY_FALLBACK_NOT_TRIGGERED:${fallbackReduced.performance.fidelityLevel}`);
   assert(fallbackReduced.performance.activeParticleCount < fallbackReduced.performance.totalParticleCount, 'FIDELITY_FALLBACK_PARTICLES_NOT_REDUCED');
   assert(fallbackReduced.visual.v8.detail.medianVisibleCellEdge === fallbackBefore.visual.v8.detail.medianVisibleCellEdge, 'FALLBACK_HERO_RESOLUTION_CHANGED');
@@ -204,6 +288,7 @@ try {
   assert(fallbackRecovered.performance.fidelityLevel === 'high', `FIDELITY_FALLBACK_NOT_RECOVERED:${fallbackRecovered.performance.fidelityLevel}`);
   assert(fallbackRecovered.performance.activeParticleCount === fallbackRecovered.performance.totalParticleCount, 'FIDELITY_PARTICLES_NOT_RESTORED');
   const fallbackEvidence = {
+    warmup: fallbackWarmup,
     before: fallbackBefore.performance,
     reduced: fallbackReduced.performance,
     recovered: fallbackRecovered.performance,
@@ -258,7 +343,7 @@ try {
   assert(performanceStats.performance.frameTimeP95Ms <= 22, `INTERACTION_FRAME_P95: ${performanceStats.performance.frameTimeP95Ms.toFixed(2)}ms`);
   assert(performanceStats.performance.longTaskCount === 0, `LONG_TASK: ${performanceStats.performance.longTaskCount} tasks over 80ms`);
 
-  // Resource stability after all eight programs are warm.
+  // Resource stability after all nine programs are warm.
   for (const theme of themes) {
     await page.evaluate((value) => window.__VOXELQR_TEST__.setTheme(value), theme);
     await page.waitForTimeout(45);
@@ -292,14 +377,14 @@ try {
     descriptor: document.querySelector('.brand small')?.textContent?.trim(),
   }));
   assert(zhPublicIdentity.heading === '3D 動態體素 QR Code 生成器' && zhPublicIdentity.descriptor === '3D 動態體素 QR Code 生成器', 'I18N_ZH_TW: exact public name mismatch');
-  await page.screenshot({ path: path.join(previewRoot, '15-zh-TW-ui.png') });
+  await page.screenshot({ path: path.join(previewRoot, `${String(themes.length * 2 + 6).padStart(2, '0')}-zh-TW-ui.png`) });
   await page.evaluate(() => window.__VOXELQR_TEST__.setLocale('en'));
   const enPublicIdentity = await page.evaluate(() => ({
     displayName: document.querySelector('.brand strong')?.textContent?.trim(),
     descriptor: document.querySelector('.brand small')?.textContent?.trim(),
   }));
   assert(enPublicIdentity.displayName === 'VoxelQR Studio' && enPublicIdentity.descriptor === 'Dynamic 3D Voxel QR Code Generator', 'I18N_EN: Studio identity mismatch');
-  await page.screenshot({ path: path.join(previewRoot, '16-en-ui.png') });
+  await page.screenshot({ path: path.join(previewRoot, `${String(themes.length * 2 + 7).padStart(2, '0')}-en-ui.png`) });
   const namedButtons = await page.locator('button').evaluateAll((buttons) => buttons.every((button) => Boolean((button.getAttribute('aria-label') || button.textContent || '').trim())));
   assert(namedButtons, 'ACCESSIBILITY_GATE: unnamed button');
   await page.locator('body').click({ position: { x: 2, y: 2 } });
@@ -323,7 +408,7 @@ try {
   }));
   assert(mobileLayout.scrollWidth <= mobileLayout.width, `RESPONSIVE_GATE: horizontal overflow ${mobileLayout.scrollWidth}/${mobileLayout.width}`);
   assert(mobileLayout.scene && mobileLayout.scan && mobileLayout.canvasCount === 1, 'RESPONSIVE_GATE: controls/canvas unavailable');
-  await mobile.screenshot({ path: path.join(previewRoot, '22-mobile-web.png'), fullPage: true });
+  await mobile.screenshot({ path: path.join(previewRoot, `${String(themes.length * 2 + 8).padStart(2, '0')}-mobile-web.png`), fullPage: true });
   await mobile.close();
 
   assert(thirdPartyRequests.length === 0, `WEB_THIRD_PARTY_NETWORK: ${thirdPartyRequests.join(', ')}`);
@@ -340,7 +425,16 @@ try {
     SCAN_COLOR_INVARIANCE_GATE: 'PASS',
     CAMERA_TRANSITION_GATE: 'PASS',
     CAMERA_RETURN_GATE: 'PASS',
-    SCAN_ANIMATION_CONTINUITY_GATE: 'PASS',
+    SCAN_ANIMATION_CONTINUITY_GATE: 'PASS_8_ANIMATED_THEMES_PLUS_KITTY_EXACT_SNAPSHOT_FREEZE',
+    KITTY_SCAN_FREEZE_GATE: 'PASS_EXACT_COMPLETE_SNAPSHOT_HIDDEN',
+    KITTY_SCAN_ZERO_DIFF_GATE: 'PASS_FULL_FRAME_AND_QR_ROI_0',
+    KITTY_MOVING_SCAN_CUT_GATE: 'PASS_MOVING_POSE',
+    KITTY_SCAN_RENDERABLES_GATE: 'PASS_0_VISIBLE',
+    KITTY_SCAN_RESUME_GATE: 'PASS_FROM_EXACT_RESTORED_CLOCK',
+    R6_KITTY_PRODUCTION_SEED_GATE: 'PASS_CRYPTO_SESSION_SEED',
+    R6_KITTY_NO_FIXED_LOOP_GATE: 'PASS_NO_FINITE_CYCLE_NO_MODULO_NO_FIXED_WAYPOINT_ORDER_NO_MANDATORY_RETURN',
+    R6_KITTY_SCAN_STATE_GATE: 'PASS_INTENT_STEERING_HEATMAP_RECENT_TARGETS_SEED_RNG_EXACT',
+    kittyFreezeEvidence: { engage: kittyEngage, zeroDiff: kittyZeroDiff, frozenFirst: kittyFrozenFirst, frozenSecond: kittyFrozenSecond, resumed: kittyResumed },
     QR_DECODE_GATE: `PASS_${staticDecoded}_OF_${staticDecodeTotal}`,
     SCAN_ANIMATED_DECODE_GATE: `PASS_${animatedDecoded}_OF_${animatedDecodeTotal}`,
     WEB_QR_RUNTIME_GATE: `PASS_${themes.length}_OF_${themes.length}`,

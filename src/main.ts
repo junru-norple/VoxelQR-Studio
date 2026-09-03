@@ -7,10 +7,44 @@ import {
   type HeroAreaWindowMetric,
   type ProjectedCompositionMetric,
 } from './scene/VoxelGarden';
-import { isThemeId, THEMES, THEME_IDS, type ThemeId } from './themes';
+import {
+  KITTY_AUTHORING_SCALE,
+  KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL,
+  KITTY_VISUAL_X_SCALE,
+  KITTY_VISUAL_Y_SCALE,
+  KITTY_VISUAL_Z_SCALE,
+  WANDERER_AUTHORING_SCALE,
+  WANDERER_CHARACTER_SCALE,
+  WANDERER_SILHOUETTE_DEPTH_SCALE,
+} from './scene/v8Hero';
+import {
+  R3_KITTY_FOOT_CONTACT_Y,
+  R3_KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL,
+  R3_KITTY_VISUAL_X_SCALE,
+  R3_KITTY_VISUAL_Y_SCALE,
+  R3_KITTY_VISUAL_Z_SCALE,
+  R3_WANDERER_FOOT_CONTACT_Y,
+  R4_KITTY_LINEAR_SCALE,
+  R4_WANDERER_LINEAR_SCALE,
+} from './scene/r4CharacterContract';
+import {
+  R6_KITTY_SCAN_FOOTPRINT_RADIUS_LOCAL as KITTY_SCAN_FOOTPRINT_RADIUS_LOCAL,
+} from './scene/r6KittyNaturalMotion';
+import {
+  R5_KITTY_LINEAR_SCALE_FROM_R3,
+  R5_KITTY_LINEAR_SCALE_FROM_R4,
+  R5_KITTY_MASK_CAMERA,
+  R5_KITTY_MASK_DENOMINATOR,
+  R5_KITTY_PROJECTED_SILHOUETTE_MAX,
+  R5_KITTY_PROJECTED_SILHOUETTE_MIN,
+  R5_KITTY_PROJECTED_SILHOUETTE_TARGET,
+  R5_KITTY_SHADOW_SAFETY_MARGIN_LOCAL,
+  R5_PHYSICAL_BOARD_QUIET_ZONE_MODULES,
+} from './scene/r5CharacterContract';
+import { isStudioThemeId, STUDIO_THEME_IDS, THEMES, type StudioThemeId } from './themes';
 
 type Mode = 'scene' | 'scan';
-type InspectionView = 'front' | 'three-quarter' | 'side' | 'back' | 'top' | 'top-oblique';
+type InspectionView = 'front' | 'three-quarter' | 'three-quarter-rear' | 'side' | 'left-side' | 'right-side' | 'back' | 'low' | 'top' | 'top-oblique';
 type StructureEvidenceMode = 'normal' | 'color-structure' | 'grayscale' | 'leafless';
 
 interface RuntimeStats extends GardenStats {
@@ -24,17 +58,23 @@ interface RuntimeStats extends GardenStats {
 declare global {
   interface Window {
     __VOXELQR_TEST__: {
-      setTheme: (theme: ThemeId) => void;
+      setTheme: (theme: StudioThemeId) => void;
       setMode: (mode: Mode) => void;
       setLocale: (locale: Locale) => void;
       setPayload: (payload: string, type?: PayloadType) => Promise<void>;
       getQr: () => CanonicalQr;
       setInspectionView: (view: InspectionView) => void;
+      setInspectionOrbitAngle: (angleDegrees: number) => void;
+      resetView: () => void;
       setStructureEvidenceMode: (mode: StructureEvidenceMode) => void;
       getStats: () => RuntimeStats;
       getTreeMotionSample: () => unknown;
       getTreeStructureEvidence: () => unknown;
       getParticleMotionSample: () => unknown;
+      getKittyMotionSample: () => unknown;
+      measureKittyScanNoCatPixelDiff: (options?: { includeImages?: boolean }) => unknown;
+      getR4CharacterContract: () => unknown;
+      getR5CorrectionContract: () => unknown;
       getProjectedComposition: () => ProjectedCompositionMetric;
       measureSemanticHeroAreaWindow: (options?: {
         startTimeSeconds?: number;
@@ -44,8 +84,10 @@ declare global {
         includeWorstMask?: boolean;
         includeExtremaMasks?: boolean;
         cameraMode?: 'top-down' | 'default';
+        kittySubjectLinearScaleMultiplier?: number;
       }) => HeroAreaWindowMetric;
       setDiagnosticAnimationTime: (timeSeconds: number | null) => void;
+      setKittyTestSeed: (sessionSeed: string | null) => void;
       captureTopDown: () => string;
       resetPerformanceMetrics: () => void;
       sampleFidelityFrame: (frameTime: number) => void;
@@ -55,7 +97,7 @@ declare global {
 
 const defaultPayload = 'https://example.com/voxelqr-studio';
 let locale = readPreference<Locale>('voxelqr-locale', ['zh-TW', 'en'], 'zh-TW');
-let theme = readPreference<ThemeId>('voxelqr-theme', THEME_IDS, 'sakura');
+let theme = readPreference<StudioThemeId>('voxelqr-theme', STUDIO_THEME_IDS, 'sakura');
 let payloadType: PayloadType = 'url';
 let mode: Mode = 'scene';
 let qr = createCanonicalQr(defaultPayload, payloadType);
@@ -89,7 +131,7 @@ function percentile(values: number[], value: number): number {
 }
 
 function themeCards(): string {
-  return THEME_IDS.map((id) => {
+  return STUDIO_THEME_IDS.map((id) => {
     const palette = THEMES[id];
     return `<button type="button" class="theme-card" data-theme="${id}" aria-pressed="${id === theme}"
       style="--card-dark:${palette.scanDark};--card-mid:${palette.mid};--card-bright:${palette.bright};--card-light:${palette.highlight}">
@@ -274,7 +316,7 @@ function setSyncState(state: 'syncing' | 'synchronized' | 'needsInput'): void {
 }
 
 function setTheme(value: string): void {
-  if (!isThemeId(value)) return;
+  if (!isStudioThemeId(value)) return;
   theme = value;
   savePreference('voxelqr-theme', theme);
   document.querySelectorAll<HTMLButtonElement>('[data-theme]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.theme === theme)));
@@ -302,7 +344,7 @@ function setLocale(next: Locale): void {
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((element) => {
     element.textContent = label(element.dataset.i18n as MessageKey);
   });
-  THEME_IDS.forEach((id) => {
+  STUDIO_THEME_IDS.forEach((id) => {
     const element = document.querySelector<HTMLElement>(`[data-theme-label="${id}"]`);
     if (element) element.textContent = label(id);
   });
@@ -352,6 +394,8 @@ window.__VOXELQR_TEST__ = {
   setMode: (next) => setMode(next),
   setLocale: (next) => setLocale(next),
   setInspectionView: (view) => garden.setInspectionView(view),
+  setInspectionOrbitAngle: (angleDegrees) => garden.setInspectionOrbitAngle(angleDegrees),
+  resetView: () => garden.resetView(),
   setStructureEvidenceMode: (mode) => garden.setStructureEvidenceMode(mode),
   setPayload: async (payload, type = 'text') => {
     setPayloadType(type, false);
@@ -371,9 +415,108 @@ window.__VOXELQR_TEST__ = {
   getTreeMotionSample: () => garden.getTreeMotionSample(),
   getTreeStructureEvidence: () => garden.getTreeStructureEvidence(),
   getParticleMotionSample: () => garden.getParticleMotionSample(),
+  getKittyMotionSample: () => garden.getKittyMotionSample(),
+  measureKittyScanNoCatPixelDiff: (options) => garden.measureKittyScanNoCatPixelDiff(options),
+  getR4CharacterContract: () => ({
+    schemaVersion: 'voxelqr-r4-character-transform-v1',
+    gateBasis: 'direct R3 transform coefficients; screen-space occupancy is evidence only',
+    wanderer: {
+      requiredLinearScale: R4_WANDERER_LINEAR_SCALE,
+      r3: {
+        authoring: 1,
+        character: 1,
+        depth: 1,
+        footContactBottomLocal: R3_WANDERER_FOOT_CONTACT_Y,
+      },
+      r4: {
+        authoring: WANDERER_AUTHORING_SCALE,
+        character: WANDERER_CHARACTER_SCALE,
+        depth: WANDERER_SILHOUETTE_DEPTH_SCALE,
+        linearAxes: {
+          x: WANDERER_CHARACTER_SCALE,
+          y: WANDERER_CHARACTER_SCALE,
+          z: WANDERER_CHARACTER_SCALE * WANDERER_SILHOUETTE_DEPTH_SCALE,
+        },
+        footContactBottomLocal: R3_WANDERER_FOOT_CONTACT_Y,
+      },
+    },
+    kitty: {
+      requiredLinearScale: R4_KITTY_LINEAR_SCALE,
+      r3: {
+        authoring: 1,
+        visualX: R3_KITTY_VISUAL_X_SCALE,
+        visualY: R3_KITTY_VISUAL_Y_SCALE,
+        visualZ: R3_KITTY_VISUAL_Z_SCALE,
+        visualFootprintRadiusLocal: R3_KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL,
+        scanFootprintRadiusLocal: KITTY_SCAN_FOOTPRINT_RADIUS_LOCAL,
+        footContactBottomLocal: R3_KITTY_FOOT_CONTACT_Y,
+      },
+      r4: {
+        authoring: KITTY_AUTHORING_SCALE,
+        visualX: R3_KITTY_VISUAL_X_SCALE * R4_KITTY_LINEAR_SCALE,
+        visualY: R3_KITTY_VISUAL_Y_SCALE * R4_KITTY_LINEAR_SCALE,
+        visualZ: R3_KITTY_VISUAL_Z_SCALE * R4_KITTY_LINEAR_SCALE,
+        visualFootprintRadiusLocal: R3_KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL * R4_KITTY_LINEAR_SCALE,
+        scanFootprintRadiusLocal: KITTY_SCAN_FOOTPRINT_RADIUS_LOCAL,
+        linearAxes: {
+          x: R4_KITTY_LINEAR_SCALE,
+          y: R4_KITTY_LINEAR_SCALE,
+          z: R4_KITTY_LINEAR_SCALE,
+        },
+        footContactBottomLocal: R3_KITTY_FOOT_CONTACT_Y,
+      },
+    },
+  }),
+  getR5CorrectionContract: () => ({
+    schemaVersion: 'voxelqr-r5-correction-contract-v1',
+    acceptanceBasis: 'deterministic object-ID silhouette pixels divided by full physical board top mask pixels',
+    aabbAcceptanceRole: 'informational-only-not-a-gate',
+    kitty: {
+      r4PreservedBaseline: {
+        linearScaleFromR3: R4_KITTY_LINEAR_SCALE,
+        modelTailPaletteAnimationStylePreserved: true,
+      },
+      r5: {
+        linearScaleFromR4: R5_KITTY_LINEAR_SCALE_FROM_R4,
+        linearScaleFromR3: R5_KITTY_LINEAR_SCALE_FROM_R3,
+        actualVisualScale: {
+          x: KITTY_VISUAL_X_SCALE,
+          y: KITTY_VISUAL_Y_SCALE,
+          z: KITTY_VISUAL_Z_SCALE,
+        },
+        actualVisualFootprintRadiusLocal: KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL,
+        silhouette: {
+          target: R5_KITTY_PROJECTED_SILHOUETTE_TARGET,
+          min: R5_KITTY_PROJECTED_SILHOUETTE_MIN,
+          max: R5_KITTY_PROJECTED_SILHOUETTE_MAX,
+          camera: R5_KITTY_MASK_CAMERA,
+          denominator: R5_KITTY_MASK_DENOMINATOR,
+        },
+        navigation: {
+          quietZoneModules: R5_PHYSICAL_BOARD_QUIET_ZONE_MODULES,
+          responsiveScaleBasis: '(N + 2 * quietZone) / (33 + 2 * quietZone)',
+          shadowSafetyMarginLocal: R5_KITTY_SHADOW_SAFETY_MARGIN_LOCAL,
+          fullPhysicalBoardCoverageRequired: true,
+        },
+        scan: {
+          characterGroupRenderable: false,
+          characterCapsRenderable: false,
+          exactPoseSnapshotRequired: true,
+          revealOnlyAfterExploreRestore: true,
+        },
+      },
+    },
+    wanderer: {
+      r4ScalePreserved: true,
+      continuousFullNeckLoop: true,
+      knot: 'side-front',
+      tails: ['short-forward-outward', 'long-side-down'],
+    },
+  }),
   getProjectedComposition: () => garden.getProjectedComposition(),
   measureSemanticHeroAreaWindow: (options) => garden.measureSemanticHeroAreaWindow(options),
   setDiagnosticAnimationTime: (timeSeconds) => garden.setDiagnosticAnimationTime(timeSeconds),
+  setKittyTestSeed: (sessionSeed) => garden.setKittyTestSeed(sessionSeed),
   captureTopDown: () => garden.captureTopDown(),
   resetPerformanceMetrics: () => garden.resetPerformanceMetrics(),
   sampleFidelityFrame: (frameTime) => garden.sampleFidelityFrame(frameTime),

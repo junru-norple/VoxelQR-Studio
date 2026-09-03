@@ -28,7 +28,7 @@ const payloadCases = [
 
 const allSemantics: HeroSemantic[] = [
   'trunk', 'branch', 'canopy', 'sun-core', 'sun-support', 'water', 'water-support',
-  'wanderer-hood', 'wanderer-face', 'wanderer-eye', 'wanderer-body',
+  'wanderer-hood', 'wanderer-face', 'wanderer-eye', 'wanderer-nose', 'wanderer-mouth', 'wanderer-body',
   'wanderer-arm', 'wanderer-foot', 'wanderer-ear', 'wanderer-scarf',
   'wanderer-pack', 'wanderer-seam', 'wanderer-garden',
 ];
@@ -42,11 +42,13 @@ const expectedAllowlist: Record<ThemeId, HeroSemantic[]> = {
   sunset: ['sun-core'],
   ocean: ['water'],
   wanderer: [
-    'wanderer-hood', 'wanderer-face', 'wanderer-eye', 'wanderer-body',
+    'wanderer-hood', 'wanderer-face', 'wanderer-eye', 'wanderer-nose', 'wanderer-mouth', 'wanderer-body',
     'wanderer-arm', 'wanderer-foot', 'wanderer-ear', 'wanderer-scarf',
     'wanderer-pack', 'wanderer-seam',
   ],
 };
+
+const MICRO_THEME_IDS = THEME_IDS.slice(0, 7) as ThemeId[];
 
 describe('v8.3 retained semantic contract under the superseding v8.4 two-sided gate', () => {
   it('locks the superseding lower and upper thresholds, authoring target, fixed timestep, and complete motion windows', () => {
@@ -75,7 +77,7 @@ describe('v8.3 retained semantic contract under the superseding v8.4 two-sided g
     expect(new Set(sizes)).toEqual(new Set([21, 25, 29, 33, 37, 65, 105]));
   });
 
-  it.each(THEME_IDS)('%s retains real semantic geometry without coarsening the micro-voxel edge', (theme) => {
+  it.each(MICRO_THEME_IDS)('%s retains real semantic geometry without coarsening the micro-voxel edge', (theme) => {
     const qr = createCanonicalQr('X'.repeat(36), 'text');
     const hero = buildV8Hero(qr, theme, seededRandom(hashSeed(`${theme}:hero:v8.2`)));
     const semantic = hero.bodies.filter((state) => isHeroAreaSemantic(theme, state.semantic));

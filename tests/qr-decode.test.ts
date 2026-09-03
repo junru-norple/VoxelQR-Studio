@@ -1,7 +1,7 @@
 import jsQR from 'jsqr';
 import { describe, expect, it } from 'vitest';
 import { createCanonicalQr, renderQrRgba, type PayloadType } from '../src/core/qr';
-import { THEME_IDS } from '../src/themes';
+import { STUDIO_THEME_IDS } from '../src/themes';
 
 const cases: Array<{ name: string; type: PayloadType; payload: string }> = [
   { name: 'short URL', type: 'url', payload: 'https://example.com' },
@@ -14,8 +14,8 @@ const cases: Array<{ name: string; type: PayloadType; payload: string }> = [
   { name: 'Unicode symbols', type: 'text', payload: 'QR → voxels ✓ 3D ◇ 波／雪／花 ♫' },
 ];
 
-describe('QR_DECODE_GATE 8 themes × 8 payload classes', () => {
-  for (const theme of THEME_IDS) {
+describe('QR_DECODE_GATE 9 themes × 8 payload classes', () => {
+  for (const theme of STUDIO_THEME_IDS) {
     for (const testCase of cases) {
       it(`${theme} / ${testCase.name}`, () => {
         const qr = createCanonicalQr(testCase.payload, testCase.type);

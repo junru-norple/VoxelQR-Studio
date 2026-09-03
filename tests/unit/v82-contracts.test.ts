@@ -22,6 +22,8 @@ const V81_BASELINE = {
   wanderer: { count: 1502, majorAxis: 9.96 },
 } satisfies Record<ThemeId, { count: number; majorAxis: number }>;
 
+const MICRO_THEME_IDS = THEME_IDS.slice(0, 7) as ThemeId[];
+
 function qrOfSize(size: number): CanonicalQr {
   return { payload: `synthetic-${size}`, size, matrix: Array.from({ length: size }, () => Array<boolean>(size).fill(false)) };
 }
@@ -52,7 +54,7 @@ function majorAxis(states: BodyState[]): number {
 }
 
 describe('v8.2 direct detail uplift contract', () => {
-  it.each(THEME_IDS)('%s exceeds its actual v8.1 linear-detail baseline while retaining all visible support geometry under the v8.4 area gate', (theme) => {
+  it.each(MICRO_THEME_IDS)('%s exceeds its actual v8.1 linear-detail baseline while retaining all visible support geometry under the v8.4 area gate', (theme) => {
     const hero = build(theme);
     const semantic = semanticBodies(theme, hero.bodies);
     const metrics = collectV8Metrics(theme, hero.bodies, hero.particles).detail;
@@ -66,13 +68,16 @@ describe('v8.2 direct detail uplift contract', () => {
     expect(boundsRatio).toBeGreaterThanOrEqual(0.98);
   });
 
-  it('keeps Pixel Wanderer at parity with the seven existing v8.2 Hero medians', () => {
-    const medians = THEME_IDS.map((theme) => {
+  it('freezes the seven v8.2 micro medians while allowing the R3 Wanderer to use deliberate low-resolution parts', () => {
+    const medians = MICRO_THEME_IDS.map((theme) => {
       const hero = build(theme);
       return collectV8Metrics(theme, hero.bodies, hero.particles).detail.medianVisibleCellEdge;
     });
-    const existingMedian = [...medians.slice(0, 7)].sort((a, b) => a - b)[3];
-    expect(medians[7] / existingMedian).toBeLessThanOrEqual(1.1);
+    const existingMedian = [...medians].sort((a, b) => a - b)[3];
+    const wanderer = build('wanderer');
+    const wandererMedian = collectV8Metrics('wanderer', wanderer.bodies, wanderer.particles).detail.medianVisibleCellEdge;
+    expect(medians.every((median) => median <= MICRO_EDGE)).toBe(true);
+    expect(wandererMedian).toBeGreaterThan(existingMedian * 4);
   });
 
   it('keeps Pixel Wanderer volumetric proportions inside the v8.2 acceptance envelope', () => {

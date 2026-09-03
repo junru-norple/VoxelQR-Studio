@@ -1,6 +1,6 @@
 # Third-party notices
 
-VoxelQR Studio's source is MIT licensed. Runtime dependencies were selected for permissive redistribution and audited on 2026-08-21.
+VoxelQR Studio's source is MIT licensed. Runtime dependencies were selected for permissive redistribution and re-audited for v1.1.0 on 2026-08-30. No direct or transitive dependency was added or upgraded from v1.0.0.
 
 ## Direct runtime components
 

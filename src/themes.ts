@@ -1,11 +1,13 @@
 export const THEME_IDS = ['sakura', 'summer', 'maple', 'ginkgo', 'snow', 'sunset', 'ocean', 'wanderer'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
+export const STUDIO_THEME_IDS = [...THEME_IDS, 'kitty'] as const;
+export type StudioThemeId = (typeof STUDIO_THEME_IDS)[number];
 
-export type ThemeFamily = 'blossom' | 'canopy' | 'maple' | 'ginkgo' | 'snow' | 'sunset' | 'ocean' | 'wanderer';
-export type ThemeMotion = 'petal-drift' | 'canopy-breathe' | 'ember-turn' | 'fan-fall' | 'snow-drift' | 'sun-breathe' | 'travelling-wave' | 'wanderer-idle';
+export type ThemeFamily = 'blossom' | 'canopy' | 'maple' | 'ginkgo' | 'snow' | 'sunset' | 'ocean' | 'wanderer' | 'kitty';
+export type ThemeMotion = 'petal-drift' | 'canopy-breathe' | 'ember-turn' | 'fan-fall' | 'snow-drift' | 'sun-breathe' | 'travelling-wave' | 'wanderer-idle' | 'kitty-explore';
 
 export interface ThemeDefinition {
-  id: ThemeId;
+  id: StudioThemeId;
   family: ThemeFamily;
   motion: ThemeMotion;
   glyph: string;
@@ -23,7 +25,7 @@ export interface ThemeDefinition {
   moduleColors: [string, string, string];
 }
 
-export const THEMES: Record<ThemeId, ThemeDefinition> = {
+export const THEMES: Record<StudioThemeId, ThemeDefinition> = {
   sakura: {
     id: 'sakura', family: 'blossom', motion: 'petal-drift', glyph: '花', signature: 'one rounded-pixel cherry tree',
     scanDark: '#a52b6d', mid: '#df4f96', bright: '#ff91c2', highlight: '#ffd1e5', trunk: '#704129',
@@ -72,8 +74,18 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     ground: '#f7f0de', groundAlt: '#b9e5cf', groundEdge: '#6f8f85', sky: ['#ded8ea', '#b8e6d5'], light: ['#fff4d6', '#c4a6ed'],
     moduleColors: ['#3e2869', '#7651a8', '#bdf5d7'],
   },
+  kitty: {
+    id: 'kitty', family: 'kitty', motion: 'kitty-explore', glyph: '貓', signature: 'one original orange-gold voxel cat exploring a decoder-safe route',
+    scanDark: '#7a4515', mid: '#d77b1f', bright: '#f2aa3a', highlight: '#fff0c8', trunk: '#5a341b',
+    ground: '#fff6df', groundAlt: '#d8e8c0', groundEdge: '#7aa47c', sky: ['#e0eee8', '#f7ddb8'], light: ['#fff7df', '#ffc46b'],
+    moduleColors: ['#6c3b12', '#c66d1b', '#efa437'],
+  },
 };
 
 export function isThemeId(value: string): value is ThemeId {
   return THEME_IDS.includes(value as ThemeId);
+}
+
+export function isStudioThemeId(value: string): value is StudioThemeId {
+  return STUDIO_THEME_IDS.includes(value as StudioThemeId);
 }

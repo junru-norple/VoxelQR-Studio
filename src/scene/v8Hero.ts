@@ -1,6 +1,25 @@
 import * as THREE from 'three';
 import type { CanonicalQr } from '../core/qr';
-import { THEMES, type ThemeDefinition, type ThemeId } from '../themes';
+import { THEMES, type StudioThemeId, type ThemeDefinition, type ThemeId } from '../themes';
+import type { KittyNaturalPose } from './r6KittyNaturalMotion';
+import {
+  R3_KITTY_FOOT_CONTACT_Y,
+  R3_KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL,
+  R3_KITTY_VISUAL_X_SCALE,
+  R3_KITTY_VISUAL_Y_SCALE,
+  R3_KITTY_VISUAL_Z_SCALE,
+  R3_WANDERER_FOOT_CONTACT_Y,
+  R4_KITTY_LINEAR_SCALE,
+  R4_WANDERER_LINEAR_SCALE,
+  scaleCenterAboutContact,
+} from './r4CharacterContract';
+import {
+  R5_KITTY_LINEAR_SCALE_FROM_R4,
+  R5_KITTY_PROJECTED_SILHOUETTE_MAX,
+  R5_KITTY_PROJECTED_SILHOUETTE_MIN,
+  R5_KITTY_PROJECTED_SILHOUETTE_TARGET,
+  r5KittyScaleForGrid,
+} from './r5CharacterContract';
 
 export const V7_HERO_CELL_EDGE = 0.9;
 export const V8_1_MICRO_STEP = 0.5;
@@ -19,10 +38,37 @@ export const HERO_AREA_REQUIRED_MIN = 0.4;
 export const HERO_AREA_REQUIRED_MAX = 0.5;
 export const HERO_AREA_AUTHORING_TARGET = 0.45;
 export const HERO_AREA_SAMPLE_HZ = 60;
-export const WANDERER_AUTHORING_SCALE = 0.845;
-export const WANDERER_CHARACTER_SCALE = 0.9;
-export const WANDERER_SILHOUETTE_DEPTH_SCALE = 1.21;
-export const HERO_AREA_WINDOW_SECONDS: Record<ThemeId, number> = {
+export const WANDERER_AUTHORING_SCALE = 1;
+export const WANDERER_CHARACTER_SCALE = R4_WANDERER_LINEAR_SCALE;
+export const WANDERER_SILHOUETTE_DEPTH_SCALE = 1;
+export const KITTY_AUTHORING_SCALE = 1;
+export const KITTY_VISUAL_X_SCALE =
+  R3_KITTY_VISUAL_X_SCALE * R4_KITTY_LINEAR_SCALE * R5_KITTY_LINEAR_SCALE_FROM_R4;
+export const KITTY_VISUAL_Y_SCALE =
+  R3_KITTY_VISUAL_Y_SCALE * R4_KITTY_LINEAR_SCALE * R5_KITTY_LINEAR_SCALE_FROM_R4;
+export const KITTY_VISUAL_Z_SCALE =
+  R3_KITTY_VISUAL_Z_SCALE * R4_KITTY_LINEAR_SCALE * R5_KITTY_LINEAR_SCALE_FROM_R4;
+export const KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL =
+  R3_KITTY_VISUAL_FOOTPRINT_RADIUS_LOCAL * R4_KITTY_LINEAR_SCALE * R5_KITTY_LINEAR_SCALE_FROM_R4;
+export const WANDERER_AREA_REQUIRED_MIN = 0.3;
+export const WANDERER_AREA_REQUIRED_MAX = 0.45;
+export const WANDERER_AREA_AUTHORING_TARGET = 0.375;
+export const HERO_AREA_BANDS: Record<StudioThemeId, { min: number; max: number; target: number }> = {
+  sakura: { min: HERO_AREA_REQUIRED_MIN, max: HERO_AREA_REQUIRED_MAX, target: HERO_AREA_AUTHORING_TARGET },
+  summer: { min: HERO_AREA_REQUIRED_MIN, max: HERO_AREA_REQUIRED_MAX, target: HERO_AREA_AUTHORING_TARGET },
+  maple: { min: HERO_AREA_REQUIRED_MIN, max: HERO_AREA_REQUIRED_MAX, target: HERO_AREA_AUTHORING_TARGET },
+  ginkgo: { min: HERO_AREA_REQUIRED_MIN, max: HERO_AREA_REQUIRED_MAX, target: HERO_AREA_AUTHORING_TARGET },
+  snow: { min: HERO_AREA_REQUIRED_MIN, max: HERO_AREA_REQUIRED_MAX, target: HERO_AREA_AUTHORING_TARGET },
+  sunset: { min: HERO_AREA_REQUIRED_MIN, max: HERO_AREA_REQUIRED_MAX, target: HERO_AREA_AUTHORING_TARGET },
+  ocean: { min: HERO_AREA_REQUIRED_MIN, max: HERO_AREA_REQUIRED_MAX, target: HERO_AREA_AUTHORING_TARGET },
+  wanderer: { min: WANDERER_AREA_REQUIRED_MIN, max: WANDERER_AREA_REQUIRED_MAX, target: WANDERER_AREA_AUTHORING_TARGET },
+  kitty: {
+    min: R5_KITTY_PROJECTED_SILHOUETTE_MIN,
+    max: R5_KITTY_PROJECTED_SILHOUETTE_MAX,
+    target: R5_KITTY_PROJECTED_SILHOUETTE_TARGET,
+  },
+};
+export const HERO_AREA_WINDOW_SECONDS: Record<StudioThemeId, number> = {
   sakura: 15,
   summer: 15,
   maple: 15,
@@ -31,6 +77,7 @@ export const HERO_AREA_WINDOW_SECONDS: Record<ThemeId, number> = {
   sunset: 12,
   ocean: 12,
   wanderer: 20,
+  kitty: 60,
 };
 
 const SURFACE_SHELL_THICKNESS = MICRO_STEP * 1.55;
@@ -56,6 +103,11 @@ export const HERO_REFERENCE_MAJOR_AXIS: Record<ThemeId, number> = {
   ocean: 33,
   wanderer: 34.748 * WANDERER_CHARACTER_SCALE,
 };
+export const HERO_REFERENCE_MAJOR_AXIS_V11: Record<StudioThemeId, number> = {
+  ...HERO_REFERENCE_MAJOR_AXIS,
+  wanderer: 26.8 * R4_WANDERER_LINEAR_SCALE,
+  kitty: 24.6 * R4_KITTY_LINEAR_SCALE * R5_KITTY_LINEAR_SCALE_FROM_R4,
+};
 
 export function heroScaleForGrid(gridSize: number): number {
   return gridSize / HERO_REFERENCE_GRID_SIZE;
@@ -65,14 +117,17 @@ export type HeroSemantic =
   | 'trunk' | 'branch' | 'canopy'
   | 'sun-core' | 'sun-support'
   | 'water' | 'water-support'
-  | 'wanderer-hood' | 'wanderer-face' | 'wanderer-eye' | 'wanderer-body'
+  | 'wanderer-hood' | 'wanderer-face' | 'wanderer-eye' | 'wanderer-nose' | 'wanderer-mouth' | 'wanderer-body'
   | 'wanderer-arm' | 'wanderer-foot' | 'wanderer-ear' | 'wanderer-scarf'
-  | 'wanderer-pack' | 'wanderer-seam' | 'wanderer-garden';
+  | 'wanderer-pack' | 'wanderer-seam' | 'wanderer-garden'
+  | 'kitty-head' | 'kitty-body' | 'kitty-muzzle' | 'kitty-eye' | 'kitty-nose' | 'kitty-whisker'
+  | 'kitty-ear' | 'kitty-leg' | 'kitty-foot' | 'kitty-tail';
 
-export function isHeroAreaSemantic(themeId: ThemeId, semantic: HeroSemantic): boolean {
+export function isHeroAreaSemantic(themeId: StudioThemeId, semantic: HeroSemantic): boolean {
   if (themeId === 'sunset') return semantic === 'sun-core';
   if (themeId === 'ocean') return semantic === 'water';
   if (themeId === 'wanderer') return semantic.startsWith('wanderer-') && semantic !== 'wanderer-garden';
+  if (themeId === 'kitty') return semantic.startsWith('kitty-');
   return semantic === 'trunk' || semantic === 'branch' || semantic === 'canopy';
 }
 
@@ -80,9 +135,11 @@ export type MotionLayer =
   | 'anchored' | 'primary' | 'secondary' | 'canopy'
   | 'sun' | 'water'
   | 'wanderer-body' | 'wanderer-head' | 'wanderer-ear' | 'wanderer-eye'
-  | 'wanderer-scarf' | 'wanderer-pack' | 'support';
+  | 'wanderer-scarf' | 'wanderer-pack'
+  | 'kitty-body' | 'kitty-head' | 'kitty-ear' | 'kitty-eye' | 'kitty-leg' | 'kitty-tail'
+  | 'support';
 
-export type ParticleKind = 'petal' | 'warm-mote' | 'maple-leaf' | 'ginkgo-fan' | 'snowflake' | 'sun-mote' | 'foam' | 'mint-mote';
+export type ParticleKind = 'petal' | 'warm-mote' | 'maple-leaf' | 'ginkgo-fan' | 'snowflake' | 'sun-mote' | 'foam' | 'mint-mote' | 'gold-mote';
 
 export interface BodyState {
   x: number;
@@ -137,6 +194,10 @@ export interface ParticleState {
   lifetime: number;
   recycleGap: number;
   fallDistance: number;
+  fallDuration: number;
+  settleDuration: number;
+  boardSurfaceY: number;
+  contactY: number;
   cellEdge: number;
 }
 
@@ -158,6 +219,7 @@ export interface EvaluatedBody {
   rotationY: number;
   rotationZ: number;
   colorMix: number;
+  opacity: number;
   visible: boolean;
 }
 
@@ -200,6 +262,10 @@ export interface V8HeroMetrics {
     invisibleGapFrameCount: number;
     respawnAfterInvisibleGapCount: number;
     visibleRespawnTeleportCount: number;
+    visibleBelowBoardFrameCount: number;
+    minimumVisibleBottomClearance: number;
+    minimumSettleSeconds: number;
+    maximumSettleSeconds: number;
   };
   sunLiving: null | {
     detailLinearScale: number;
@@ -245,6 +311,17 @@ export interface V8HeroMetrics {
     backViewReadable: boolean;
     originalConstruction: boolean;
   };
+  kitty: null | {
+    originalConstruction: true;
+    palette: ['orange-gold', 'cream-white', 'dark-brown'];
+    semanticPartCount: number;
+    motionModel: 'session-seeded-natural-lively-v1';
+    sessionOwnedRuntime: true;
+    finiteCycle: false;
+    fixedWaypointOrder: false;
+    mandatoryOriginReturn: false;
+    actions: KittyActionMetric[];
+  };
   scanMotion: {
     dampingRatio: number;
     phaseContinues: boolean;
@@ -260,6 +337,8 @@ interface BuildContext {
   voxels: Map<string, BodyState>;
   particles: ParticleState[];
 }
+
+type KittyActionMetric = 'idle' | 'look' | 'walk' | 'run' | 'turn' | 'dash';
 
 const fixed = (value: number) => Number(value.toFixed(4));
 const positiveModulo = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;
@@ -294,7 +373,9 @@ function addVoxel(
   part: string,
   options: AddVoxelOptions = {},
 ): void {
-  const responsiveScale = heroScaleForGrid(context.qr.size);
+  const responsiveScale = context.theme.id === 'kitty'
+    ? r5KittyScaleForGrid(context.qr.size)
+    : heroScaleForGrid(context.qr.size);
   const logical = options.logicalColumn !== undefined && options.logicalRow !== undefined
     ? { column: options.logicalColumn, row: options.logicalRow }
     : logicalCell(context.qr, x * responsiveScale, z * responsiveScale);
@@ -1001,94 +1082,228 @@ function buildWanderer(context: BuildContext): void {
   const cream = '#f7e9cb';
   const mint = '#a7f0cf';
   const gold = '#ffd45c';
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 25.2, 0), new THREE.Vector3(15.5, 8.5, 14.8), violet, 'wanderer-hood', 'wanderer-head', 'hood');
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 11.8, 0), new THREE.Vector3(10.6, 10.8, 10.6), cream, 'wanderer-body', 'wanderer-body', 'body');
-  fillEllipsoidSurface(context, new THREE.Vector3(-6.2, 36, -0.8), new THREE.Vector3(3, 4.1, 3.1), violet, 'wanderer-ear', 'wanderer-ear', 'ear-left');
-  fillEllipsoidSurface(context, new THREE.Vector3(6.2, 36, -0.8), new THREE.Vector3(3, 4.1, 3.1), violetLight, 'wanderer-ear', 'wanderer-ear', 'ear-right');
-  fillEllipsoidSurface(context, new THREE.Vector3(-6.2, 36.2, 2), new THREE.Vector3(1.25, 2.6, 0.5), cream, 'wanderer-ear', 'wanderer-ear', 'ear-inner-left');
-  fillEllipsoidSurface(context, new THREE.Vector3(6.2, 36.2, 2), new THREE.Vector3(1.25, 2.6, 0.5), mint, 'wanderer-ear', 'wanderer-ear', 'ear-inner-right');
+  const part = (
+    x: number, y: number, z: number, color: string, semantic: HeroSemantic,
+    motionLayer: MotionLayer, name: string, scaleX: number, scaleY: number, scaleZ: number,
+    rotationY = 0,
+  ) => addVoxel(context, x, y, z, color, semantic, motionLayer, name, {
+    scaleX, scaleY, scaleZ, rotationY,
+  });
 
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 25.2, 14.2), new THREE.Vector3(7.8, 6.1, 0.72), violetDark, 'wanderer-face', 'wanderer-head', 'face-opening');
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 25.2, 14.75), new THREE.Vector3(6.4, 4.9, 0.42), cream, 'wanderer-face', 'wanderer-head', 'recessed-face');
-  fillEllipsoidSurface(context, new THREE.Vector3(-2.9, 25.9, 15.18), new THREE.Vector3(1.05, 1.3, 0.34), gold, 'wanderer-eye', 'wanderer-eye', 'eye-left');
-  fillEllipsoidSurface(context, new THREE.Vector3(2.9, 25.9, 15.18), new THREE.Vector3(1.05, 1.3, 0.34), gold, 'wanderer-eye', 'wanderer-eye', 'eye-right');
+  // The accepted R3 construction stays deliberately low resolution: every
+  // authored state below is one
+  // thick rounded cuboid. There is no sampled shell, contour stack, or face mask.
+  part(0, 16.7, 0, violet, 'wanderer-hood', 'wanderer-head', 'head-core', 14.2, 11.8, 15.8);
+  part(-4.7, 15.6, 2.2, violet, 'wanderer-hood', 'wanderer-head', 'head-cheek-left', 5.4, 7.4, 7.2);
+  part(4.7, 15.6, 2.2, violet, 'wanderer-hood', 'wanderer-head', 'head-cheek-right', 5.4, 7.4, 7.2);
+  part(0, 21.2, -0.3, violet, 'wanderer-hood', 'wanderer-head', 'head-crown', 10.8, 5.2, 9.6);
 
-  fillEllipsoidSurface(context, new THREE.Vector3(-11.7, 10.8, 1.2), new THREE.Vector3(3.2, 5.4, 3.3), cream, 'wanderer-arm', 'wanderer-body', 'arm-left');
-  fillEllipsoidSurface(context, new THREE.Vector3(11.7, 10.8, 1.2), new THREE.Vector3(3.2, 5.4, 3.3), cream, 'wanderer-arm', 'wanderer-body', 'arm-right');
-  fillEllipsoidSurface(context, new THREE.Vector3(-5.1, 1.45, 4.1), new THREE.Vector3(4.4, 1.25, 5), violetDark, 'wanderer-foot', 'anchored', 'foot-left');
-  fillEllipsoidSurface(context, new THREE.Vector3(5.1, 1.45, 4.1), new THREE.Vector3(4.4, 1.25, 5), violetDark, 'wanderer-foot', 'anchored', 'foot-right');
+  part(-4.1, 23.75, -0.5, violet, 'wanderer-ear', 'wanderer-ear', 'ear-left', 3.2, 5.2, 3.8);
+  part(4.1, 23.75, -0.5, violet, 'wanderer-ear', 'wanderer-ear', 'ear-right', 3.2, 5.2, 3.8);
+  part(-4.1, 23.9, 1.5, cream, 'wanderer-ear', 'wanderer-ear', 'ear-inner-left', 1.25, 2.7, 0.7);
+  part(4.1, 23.9, 1.5, mint, 'wanderer-ear', 'wanderer-ear', 'ear-inner-right', 1.25, 2.7, 0.7);
 
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 17.2, 0.3), new THREE.Vector3(11.4, 1.45, 10.8), mint, 'wanderer-scarf', 'wanderer-head', 'scarf-collar');
-  fillEllipsoidSurface(context, new THREE.Vector3(10.2, 11.4, 0.2), new THREE.Vector3(2.4, 7, 1.8), mint, 'wanderer-scarf', 'wanderer-scarf', 'scarf-tail');
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 17, 9.8), new THREE.Vector3(9.6, 2, 2.2), mint, 'wanderer-scarf', 'wanderer-head', 'scarf-front-fold');
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 15.5, -14.15), new THREE.Vector3(2.8, 1.8, 0.45), mint, 'wanderer-seam', 'wanderer-pack', 'pack-buckle');
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 14.8, -12.4), new THREE.Vector3(8.2, 8, 2.4), violetDark, 'wanderer-pack', 'wanderer-pack', 'backpack');
-  fillEllipsoidSurface(context, new THREE.Vector3(0, 14.2, -14.35), new THREE.Vector3(0.55, 5.8, 0.42), mint, 'wanderer-seam', 'wanderer-pack', 'back-seam');
-  fillEllipsoidSurface(context, new THREE.Vector3(11.6, 8.2, -3.2), new THREE.Vector3(2.5, 3.4, 2.4), violetLight, 'wanderer-pack', 'wanderer-pack', 'side-pouch');
+  // Two independent pads leave a clear violet channel through the face.
+  part(-3.15, 17.5, 8.35, cream, 'wanderer-face', 'wanderer-head', 'eye-pad-left', 3.35, 3.2, 1.1);
+  part(3.15, 17.5, 8.35, cream, 'wanderer-face', 'wanderer-head', 'eye-pad-right', 3.35, 3.2, 1.1);
+  part(-3.15, 17.75, 9.05, gold, 'wanderer-eye', 'wanderer-eye', 'eye-left', 1.3, 1.65, 0.62);
+  part(3.15, 17.75, 9.05, gold, 'wanderer-eye', 'wanderer-eye', 'eye-right', 1.3, 1.65, 0.62);
+  part(0, 15.85, 8.75, mint, 'wanderer-nose', 'wanderer-head', 'nose', 0.8, 0.65, 0.62);
+  part(0, 14.85, 8.68, violetDark, 'wanderer-mouth', 'wanderer-head', 'mouth', 1.05, 0.3, 0.5);
+
+  part(0, 6.8, -0.6, violet, 'wanderer-body', 'wanderer-body', 'body', 8.2, 9.6, 7.6);
+  part(0, 6.6, 3.6, cream, 'wanderer-body', 'wanderer-body', 'belly', 5.2, 5.6, 1.4);
+  part(-5.5, 7.1, 0.35, violet, 'wanderer-arm', 'wanderer-body', 'shoulder-left', 3.2, 4.2, 3.5);
+  part(5.5, 7.1, 0.35, violet, 'wanderer-arm', 'wanderer-body', 'shoulder-right', 3.2, 4.2, 3.5);
+  part(-8.25, 6.9, 0.55, cream, 'wanderer-arm', 'wanderer-body', 'arm-left', 3, 5.2, 4.1);
+  part(8.25, 6.9, 0.55, cream, 'wanderer-arm', 'wanderer-body', 'arm-right', 3, 5.2, 4.1);
+  part(-3.2, 1.05, 3.1, violetDark, 'wanderer-foot', 'anchored', 'foot-left', 5.2, 1.9, 5.1);
+  part(3.2, 1.05, 3.1, violetDark, 'wanderer-foot', 'anchored', 'foot-right', 5.2, 1.9, 5.1);
+
+  // R5 closes the accepted R4 collar into a continuous neck loop and moves the
+  // knot to the side-front quadrant. Two deliberately asymmetric tails remain
+  // outside the face/chest silhouette: one short forward/outward, one longer
+  // side/down.
+  // A compact cloth loop occupies the narrow neck shelf below the accepted
+  // oversized head. Its inner faces sit just outside the upper-body shell;
+  // adjacent pieces overlap only each other to remain visibly continuous.
+  part(0, 10, -5.2, mint, 'wanderer-scarf', 'wanderer-head', 'scarf-loop-back', 10, 1.2, 1.4);
+  part(-5, 10.1, 0, mint, 'wanderer-scarf', 'wanderer-head', 'scarf-loop-left', 1.6, 1.2, 9.2);
+  part(5, 10, 0, mint, 'wanderer-scarf', 'wanderer-head', 'scarf-loop-right', 1.6, 1.2, 9.2);
+  part(-2.5, 10.15, 4, mint, 'wanderer-scarf', 'wanderer-head', 'scarf-loop-front-left', 5, 1.2, 1.4);
+  part(2.5, 10.05, 4, mint, 'wanderer-scarf', 'wanderer-head', 'scarf-loop-front-right', 5, 1.2, 1.4);
+  part(5.4, 9.4, 4.8, mint, 'wanderer-scarf', 'wanderer-head', 'scarf-knot-side-front', 2.2, 2, 2.2, -0.18);
+  part(6.2, 8.5, 5.7, mint, 'wanderer-scarf', 'wanderer-scarf', 'scarf-tail-short-forward', 1.8, 2.2, 1.6, -0.48);
+  part(6, 6.8, 4.2, mint, 'wanderer-scarf', 'wanderer-scarf', 'scarf-tail-long-side', 1.8, 4.6, 2, 0.16);
+  part(0, 7.9, -5.3, violetDark, 'wanderer-pack', 'wanderer-pack', 'backpack', 7.1, 6.4, 2.4);
+  part(0, 7.8, -6.7, mint, 'wanderer-seam', 'wanderer-pack', 'back-seam', 0.65, 3.9, 0.55);
+  part(0, 9.3, -6.75, gold, 'wanderer-seam', 'wanderer-pack', 'pack-buckle', 2.1, 1.15, 0.58);
 
   const accents = [[-5, -2], [5, -1.5], [-4.5, 4], [4.5, 3.5]] as const;
   accents.forEach(([x, z], index) => {
     addColumn(context, x, z, 0.4, 2 + (index % 2), index % 2 ? violetLight : mint, 'wanderer-garden', 'support', `garden-accent-${index}`, 0.018);
   });
-  // Keep the existing theme authoring scale for the garden accents. The
-  // user-requested 0.90 factor applies only to the complete character, so the
-  // QR, camera, particles, and surrounding scene remain unchanged.
   context.voxels.forEach((state) => {
-    if (isHeroAreaSemantic('wanderer', state.semantic)) {
-      // Restore the character's real projected silhouette through authored
-      // costume/body depth before applying the retained uniform 0.90 transform.
-      // Width, height, QR geometry, camera framing, and scene accents stay fixed.
+    const isCharacter = isHeroAreaSemantic('wanderer', state.semantic);
+    if (isCharacter) {
       state.z *= WANDERER_SILHOUETTE_DEPTH_SCALE;
       state.scaleZ *= WANDERER_SILHOUETTE_DEPTH_SCALE;
     }
     const scale = WANDERER_AUTHORING_SCALE * (
-      isHeroAreaSemantic('wanderer', state.semantic) ? WANDERER_CHARACTER_SCALE : 1
+      isCharacter ? WANDERER_CHARACTER_SCALE : 1
     );
     state.x *= scale;
     state.z *= scale;
-    state.baseY *= scale;
+    state.baseY = isCharacter
+      ? scaleCenterAboutContact(
+        state.baseY * WANDERER_AUTHORING_SCALE,
+        R3_WANDERER_FOOT_CONTACT_Y,
+        WANDERER_CHARACTER_SCALE,
+      )
+      : state.baseY * WANDERER_AUTHORING_SCALE;
     state.scaleX *= scale;
     state.scaleY *= scale;
     state.scaleZ *= scale;
     state.cellEdge *= scale;
   });
-  buildParticles(context, 'wanderer', 15.5 * WANDERER_AUTHORING_SCALE);
+  buildParticles(context, 'wanderer', 12 * WANDERER_AUTHORING_SCALE);
 }
 
-function buildParticles(context: BuildContext, id: ThemeId, radius: number): void {
-  const kind: Record<ThemeId, ParticleKind> = {
+function buildKitty(context: BuildContext): void {
+  const orange = '#e69a2e';
+  const gold = '#f6c453';
+  const cream = '#fff0cf';
+  const dark = '#402818';
+  const pink = '#ef9ca3';
+  const part = (
+    x: number, y: number, z: number, color: string, semantic: HeroSemantic,
+    motionLayer: MotionLayer, name: string, scaleX: number, scaleY: number, scaleZ: number,
+    rotationY = 0,
+  ) => addVoxel(context, x, y, z, color, semantic, motionLayer, name, {
+    scaleX, scaleY, scaleZ, rotationY,
+  });
+
+  // One authored state is one rounded cuboid. The broad masses overlap in 3D
+  // without the rejected horizontal ellipsoid layers.
+  part(0, 8.5, 0.3, orange, 'kitty-head', 'kitty-head', 'head-core', 9.6, 7.2, 8.8);
+  part(-3.9, 8.1, 1, orange, 'kitty-head', 'kitty-head', 'head-cheek-left', 2, 5.1, 3.8);
+  part(3.9, 8.1, 1, gold, 'kitty-head', 'kitty-head', 'head-cheek-right', 2, 5.1, 3.8);
+  part(0, 4.5, -1.55, gold, 'kitty-body', 'kitty-body', 'body', 6.8, 5.5, 6);
+  part(-1, 4.25, -5.1, orange, 'kitty-body', 'kitty-body', 'haunch-left', 1.4, 3.2, 0.65);
+  part(1, 4.25, -5.1, gold, 'kitty-body', 'kitty-body', 'haunch-right', 1.4, 3.2, 0.65);
+
+  part(-4.65, 12.45, -0.2, orange, 'kitty-ear', 'kitty-ear', 'ear-left', 2.2, 4.2, 2.1);
+  part(4.65, 12.45, -0.2, gold, 'kitty-ear', 'kitty-ear', 'ear-right', 2.2, 4.2, 2.1);
+  part(-4.65, 12.55, 1.05, pink, 'kitty-ear', 'kitty-ear', 'ear-inner-left', 0.85, 2.1, 0.42);
+  part(4.65, 12.55, 1.05, pink, 'kitty-ear', 'kitty-ear', 'ear-inner-right', 0.85, 2.1, 0.42);
+
+  part(-0.9, 7.65, 4.9, cream, 'kitty-muzzle', 'kitty-head', 'muzzle-left', 1.55, 1.55, 0.8);
+  part(0.9, 7.65, 4.9, cream, 'kitty-muzzle', 'kitty-head', 'muzzle-right', 1.55, 1.55, 0.8);
+  part(-2.25, 9.25, 5.05, dark, 'kitty-eye', 'kitty-eye', 'eye-left', 1.25, 1.65, 0.62);
+  part(2.25, 9.25, 5.05, dark, 'kitty-eye', 'kitty-eye', 'eye-right', 1.25, 1.65, 0.62);
+  part(0, 7.9, 5.48, pink, 'kitty-nose', 'kitty-head', 'nose', 0.58, 0.52, 0.42);
+  part(-4.35, 7.85, 4.85, cream, 'kitty-whisker', 'kitty-head', 'whisker-left-upper', 1.7, 0.22, 0.25, -0.2);
+  part(-4.35, 7.25, 4.75, cream, 'kitty-whisker', 'kitty-head', 'whisker-left-lower', 1.7, 0.22, 0.25, 0.16);
+  part(4.35, 7.85, 4.85, cream, 'kitty-whisker', 'kitty-head', 'whisker-right-upper', 1.7, 0.22, 0.25, 0.2);
+  part(4.35, 7.25, 4.75, cream, 'kitty-whisker', 'kitty-head', 'whisker-right-lower', 1.7, 0.22, 0.25, -0.16);
+
+  const legs = [
+    [-2.35, 1.9, 1.35, 'front-left'], [2.35, 1.9, 1.35, 'front-right'],
+    [-2.35, 1.9, -3.6, 'back-left'], [2.35, 1.9, -3.6, 'back-right'],
+  ] as const;
+  legs.forEach(([x, y, z, part]) => {
+    const sideColor = part.includes('right') ? gold : orange;
+    addVoxel(context, x, y, z, sideColor, 'kitty-leg', 'kitty-leg', `leg-${part}`, {
+      scaleX: 1.4, scaleY: 2.6, scaleZ: 1.45, rotationY: 0,
+    });
+    addVoxel(context, x, 0.58, z + 0.28, cream, 'kitty-foot', 'kitty-leg', `foot-${part}`, {
+      scaleX: 1.8, scaleY: 0.95, scaleZ: 2, rotationY: 0,
+    });
+  });
+
+  // R4 keeps the R3 raised rhythm but moves the complete chain behind the
+  // right rear hip. tail-0 touches the body's rear plane exactly; subsequent
+  // segments continue rearward before lifting out into a readable silhouette.
+  const tailCenters = [
+    [3.2, 5.4, -5.4, 1.7, 3.6],
+    [4.7, 7.85, -6, 1.8, 3.6],
+    [6.2, 10.3, -6.4, 1.9, 3.7],
+    [7.7, 12.7, -6.1, 2, 3.7],
+    [9.1, 14.9, -5.4, 2.1, 3.8],
+  ] as const;
+  tailCenters.forEach(([x, y, z, thickness, height], index) => {
+    part(x, y, z, index % 2 ? gold : orange, 'kitty-tail', 'kitty-tail', `tail-${index}`, thickness, height, thickness);
+  });
+  context.voxels.forEach((state) => {
+    if (!state.semantic.startsWith('kitty-')) return;
+    state.x *= KITTY_AUTHORING_SCALE * KITTY_VISUAL_X_SCALE;
+    state.baseY = scaleCenterAboutContact(
+      state.baseY * KITTY_AUTHORING_SCALE,
+      R3_KITTY_FOOT_CONTACT_Y,
+      KITTY_VISUAL_Y_SCALE,
+    );
+    state.z *= KITTY_AUTHORING_SCALE * KITTY_VISUAL_Z_SCALE;
+    state.scaleX *= KITTY_AUTHORING_SCALE * KITTY_VISUAL_X_SCALE;
+    state.scaleY *= KITTY_AUTHORING_SCALE * KITTY_VISUAL_Y_SCALE;
+    state.scaleZ *= KITTY_AUTHORING_SCALE * KITTY_VISUAL_Z_SCALE;
+    state.cellEdge *= KITTY_AUTHORING_SCALE * Math.max(KITTY_VISUAL_X_SCALE, KITTY_VISUAL_Z_SCALE);
+  });
+  buildParticles(context, 'kitty', 4.2);
+}
+
+function buildParticles(context: BuildContext, id: StudioThemeId, radius: number): void {
+  const kind: Record<StudioThemeId, ParticleKind> = {
     sakura: 'petal', summer: 'warm-mote', maple: 'maple-leaf', ginkgo: 'ginkgo-fan', snow: 'snowflake',
-    sunset: 'sun-mote', ocean: 'foam', wanderer: 'mint-mote',
+    sunset: 'sun-mote', ocean: 'foam', wanderer: 'mint-mote', kitty: 'gold-mote',
   };
-  const count = id === 'sunset' ? 44 : id === 'ocean' ? 72 : id === 'wanderer' ? 64 : 84;
+  const count = id === 'sunset' ? 44 : id === 'ocean' ? 72 : id === 'wanderer' ? 64 : id === 'kitty' ? 36 : 84;
   for (let index = 0; index < count; index += 1) {
     const spread = id === 'ocean' ? HERO_REFERENCE_GRID_SIZE * 0.44 : radius * 1.35;
     const origin = new THREE.Vector3(
       (context.random() - 0.5) * spread * 2,
-      1 + context.random() * (id === 'ocean' ? 2.8 : id === 'wanderer' ? 8 : 8.8),
+      1 + context.random() * (id === 'ocean' ? 2.8 : id === 'wanderer' ? 8 : id === 'kitty' ? 6 : 8.8),
       (context.random() - 0.5) * (id === 'ocean' ? 8 : spread * 1.15),
     );
     const particleKind = kind[id];
-    const baseScale = particleKind === 'snowflake' ? 0.5 : particleKind === 'warm-mote' || particleKind === 'mint-mote' ? 0.32 : 0.55;
-    const lifetime = particleKind === 'snowflake'
+    const baseScale = particleKind === 'snowflake' ? 0.5 : particleKind === 'warm-mote' || particleKind === 'mint-mote' || particleKind === 'gold-mote' ? 0.32 : 0.55;
+    const ambientLifetime = particleKind === 'snowflake'
       ? 8.2 + context.random() * 2.8
       : particleKind === 'ginkgo-fan' || particleKind === 'maple-leaf'
         ? 6.8 + context.random() * 2.4
         : 5.8 + context.random() * 2.2;
     const phase = context.random() * Math.PI * 2;
+    const scale = baseScale * (0.65 + context.random() * 0.75);
+    const scaleY = particleKind === 'maple-leaf' || particleKind === 'ginkgo-fan' ? 0.38 : 1;
+    const sampledSpeed = 0.7 + context.random() * 0.8;
+    const boardSurfaceY = 0.02 / (id === 'kitty' ? r5KittyScaleForGrid(context.qr.size) : heroScaleForGrid(context.qr.size));
+    const contactY = boardSurfaceY + scale * scaleY * 0.5 + 0.002;
+    const fallDistance = Math.max(0, origin.y - contactY);
+    // Keep a complete fall, landing hold, hidden gap and respawn inside the
+    // established 12-second proof window, even for the highest spawn point.
+    const speed = Math.max(sampledSpeed, fallDistance / 7.8);
+    const fallDuration = fallDistance / speed;
+    const settleDuration = 0.5 + context.random();
+    const downward = particleKind === 'petal' || particleKind === 'warm-mote'
+      || particleKind === 'maple-leaf' || particleKind === 'ginkgo-fan'
+      || particleKind === 'snowflake' || particleKind === 'sun-mote';
+    const lifetime = downward ? fallDuration + settleDuration : ambientLifetime;
     context.particles.push({
       id: `${particleKind}-${index}`,
       origin,
       phase,
-      scale: baseScale * (0.65 + context.random() * 0.75),
-      scaleY: particleKind === 'maple-leaf' || particleKind === 'ginkgo-fan' ? 0.38 : 1,
+      scale,
+      scaleY,
       scaleZ: particleKind === 'foam' ? 1.8 : particleKind === 'petal' ? 0.48 : 1,
-      speed: 0.7 + context.random() * 0.8,
+      speed,
       drift: (context.random() - 0.5) * 1.2,
       kind: particleKind,
       lifetime,
       recycleGap: 0.72 + context.random() * 0.7,
-      fallDistance: particleKind === 'snowflake' ? 7.2 : particleKind === 'sun-mote' ? 5.8 : 7.8,
+      fallDistance,
+      fallDuration,
+      settleDuration,
+      boardSurfaceY,
+      contactY,
       cellEdge: baseScale,
     });
   }
@@ -1099,6 +1314,7 @@ function finalize(context: BuildContext): HeroBuild {
   const responsiveScale = heroScaleForGrid(context.qr.size);
   const topByColumn = new Map<string, { index: number; top: number }>();
   bodies.forEach((state, index) => {
+    if (state.semantic.startsWith('kitty-') || state.semantic === 'wanderer-garden') return;
     const key = `${Math.round(state.x * 100)},${Math.round(state.z * 100)}`;
     const top = state.baseY + state.scaleY * 0.5;
     const current = topByColumn.get(key);
@@ -1151,12 +1367,13 @@ function finalize(context: BuildContext): HeroBuild {
   return { bodies, darkCaps, lightCaps, particles: context.particles };
 }
 
-export function buildV8Hero(qr: CanonicalQr, themeId: ThemeId, random: () => number): HeroBuild {
+export function buildV8Hero(qr: CanonicalQr, themeId: StudioThemeId, random: () => number): HeroBuild {
   const context: BuildContext = { qr, theme: THEMES[themeId], random, voxels: new Map(), particles: [] };
   if (themeId === 'sunset') buildSunset(context);
   else if (themeId === 'ocean') buildOcean(context);
   else if (themeId === 'wanderer') buildWanderer(context);
-  else buildTree(context, themeId);
+  else if (themeId === 'kitty') buildKitty(context);
+  else buildTree(context, themeId as ThemeId);
   return finalize(context);
 }
 
@@ -1167,14 +1384,20 @@ function pulse(time: number, period: number, width: number, offset = 0): number 
   return Math.sin(normalized * Math.PI) ** 2;
 }
 
-export function evaluateBody(state: BodyState, themeId: ThemeId, time: number, motionScale: number): EvaluatedBody {
+export function evaluateBody(
+  state: BodyState,
+  themeId: StudioThemeId,
+  time: number,
+  motionScale: number,
+  kittyNaturalPose?: KittyNaturalPose,
+): EvaluatedBody {
   let x = state.x;
   let y = state.baseY;
   let z = state.z;
   let scaleX = state.scaleX;
   let scaleY = state.scaleY;
   let scaleZ = state.scaleZ;
-  const rotationX = 0;
+  let rotationX = 0;
   let rotationY = state.rotationY;
   let rotationZ = 0;
   let colorMix = 0;
@@ -1191,15 +1414,90 @@ export function evaluateBody(state: BodyState, themeId: ThemeId, time: number, m
     scaleY *= scale;
     scaleZ *= scale;
     colorMix = (breathe + 1) * 0.12;
+  } else if (themeId === 'kitty') {
+    const pose: KittyNaturalPose = kittyNaturalPose ?? {
+      time,
+      action: 'idle',
+      intent: 'observe',
+      x: 0,
+      z: 0,
+      worldX: 0,
+      worldZ: 0,
+      normalizedX: 0,
+      normalizedZ: 0,
+      heading: 0,
+      gaitPhase: 0,
+      speed: 0,
+      normalizedSpeed: 0,
+      headYaw: 0,
+      tailAngle: Math.sin(time * 2.1 + 0.4) * 0.22,
+      moving: false,
+    };
+    const cosine = Math.cos(pose.heading);
+    const sine = Math.sin(pose.heading);
+    const secondaryScale = THREE.MathUtils.clamp(motionScale, 0, 1);
+    let localX = x;
+    let localZ = z;
+    if (state.motionLayer === 'kitty-head' || state.motionLayer === 'kitty-eye' || state.motionLayer === 'kitty-ear') {
+      const headAngle = pose.headYaw * secondaryScale;
+      const headCosine = Math.cos(headAngle);
+      const headSine = Math.sin(headAngle);
+      const pivotZ = 0.45 * R5_KITTY_LINEAR_SCALE_FROM_R4;
+      const relativeZ = localZ - pivotZ;
+      const articulatedX = localX * headCosine + relativeZ * headSine;
+      const articulatedZ = -localX * headSine + relativeZ * headCosine + pivotZ;
+      localX = articulatedX;
+      localZ = articulatedZ;
+      rotationY += headAngle;
+    }
+    // Translation and heading remain exact when Scan is engaged. The scene
+    // freezes Kitty's clock; damping only affects secondary idle articulation.
+    x = localX * cosine + localZ * sine + pose.x;
+    z = -localX * sine + localZ * cosine + pose.z;
+    rotationY += pose.heading;
+    if (state.motionLayer === 'kitty-body') {
+      const breathe = Math.sin(time * 2.15 + state.phase * 0.04) * 0.028 * secondaryScale;
+      scaleX *= 1 - breathe * 0.18;
+      scaleY *= 1 + breathe;
+    }
+    if (state.motionLayer === 'kitty-eye') {
+      const blink = pulse(time, 4.9, 0.18, state.part.includes('left') ? 0 : 0.012);
+      scaleY *= 1 - blink * 0.82 * secondaryScale;
+    }
+    if (state.motionLayer === 'kitty-ear') {
+      const side = state.part.includes('left') ? -1 : 1;
+      const twitch = pulse(time, state.part.includes('left') ? 6.7 : 7.9, 0.34, side < 0 ? 0.3 : 2.6);
+      rotationZ += side * twitch * 0.16 * secondaryScale;
+    }
+    if (state.motionLayer === 'kitty-leg' && pose.moving) {
+      const left = state.part.includes('left');
+      const front = state.part.includes('front');
+      const stridePhase = pose.gaitPhase + (left === front ? 0 : Math.PI);
+      const lift = Math.max(0, Math.sin(stridePhase)) * 0.28 * R5_KITTY_LINEAR_SCALE_FROM_R4 * secondaryScale;
+      y += lift;
+      rotationX = Math.sin(stridePhase) * 0.18 * secondaryScale;
+    }
+    if (state.motionLayer === 'kitty-tail') {
+      const tailIndex = Number(state.part.split('-').at(-1) ?? 0);
+      if (tailIndex > 0) {
+        rotationZ += (pose.tailAngle + tailIndex * 0.025) * secondaryScale;
+        rotationY += Math.sin(time * 1.7 + tailIndex * 0.42) * 0.09 * secondaryScale;
+      }
+    }
   } else if (themeId === 'wanderer') {
     const breathe = Math.sin(time * 0.92) * 0.055 * motionScale * WANDERER_CHARACTER_SCALE;
     const weight = Math.sin(time * 0.37 + 0.8) * 0.065 * motionScale * WANDERER_CHARACTER_SCALE;
     const headAngle = (Math.sin(time * 0.31) * 0.045 + pulse(time, 8.9, 1.4, 1.2) * 0.035) * motionScale;
     if (state.motionLayer !== 'anchored' && state.motionLayer !== 'support') x += weight;
     if (state.motionLayer === 'wanderer-body') y += breathe;
-    if (state.motionLayer === 'wanderer-head' || state.motionLayer === 'wanderer-eye' || state.motionLayer === 'wanderer-ear') {
-      const pivotZ = 0;
-      const localX = x;
+    if (
+      state.motionLayer === 'wanderer-head'
+      || state.motionLayer === 'wanderer-eye'
+      || state.motionLayer === 'wanderer-ear'
+      || state.motionLayer === 'wanderer-scarf'
+    ) {
+      const pivotZ = 0.6;
+      const localX = x - weight;
       const localZ = z - pivotZ;
       x = localX * Math.cos(headAngle) + localZ * Math.sin(headAngle) + weight;
       z = -localX * Math.sin(headAngle) + localZ * Math.cos(headAngle) + pivotZ;
@@ -1216,9 +1514,11 @@ export function evaluateBody(state: BodyState, themeId: ThemeId, time: number, m
       x += (state.part.includes('left') ? -1 : 1) * twitch * 0.08 * motionScale * WANDERER_CHARACTER_SCALE;
     }
     if (state.motionLayer === 'wanderer-scarf') {
-      x += Math.sin(time * 1.18 + state.phase) * 0.16 * motionScale * WANDERER_CHARACTER_SCALE;
-      z += Math.cos(time * 0.71 + state.phase) * 0.08 * motionScale * WANDERER_CHARACTER_SCALE;
-      rotationZ = Math.sin(time * 1.05 + state.phase) * 0.1 * motionScale;
+      // The closed loop and knot stay rigidly registered to the neck so the
+      // ring never breaks. Only the two tails receive local cloth sway.
+      if (state.part.startsWith('scarf-tail-')) {
+        rotationZ += Math.sin(time * 1.05 + state.phase) * 0.1 * motionScale;
+      }
     }
     if (state.motionLayer === 'wanderer-pack') y += breathe * 0.38;
   } else if (state.treeHeight > 0 && state.motionLayer !== 'anchored' && state.motionLayer !== 'support') {
@@ -1239,7 +1539,7 @@ export function evaluateBody(state: BodyState, themeId: ThemeId, time: number, m
     rotationZ += bend / Math.max(state.treeHeight, 0.001) * 0.16;
     rotationY += lineageLag * 0.025 * motionScale;
   }
-  return { x, y, z, scaleX, scaleY, scaleZ, rotationX, rotationY, rotationZ, colorMix, visible: true };
+  return { x, y, z, scaleX, scaleY, scaleZ, rotationX, rotationY, rotationZ, colorMix, opacity: 1, visible: true };
 }
 
 export function evaluateParticle(state: ParticleState, time: number, motionScale: number): EvaluatedBody {
@@ -1250,6 +1550,7 @@ export function evaluateParticle(state: ParticleState, time: number, motionScale
   const rotationY = state.phase;
   let rotationZ = time * 0.25;
   let visible = true;
+  let opacity = 1;
   const isDownwardFamily = state.kind === 'petal'
     || state.kind === 'warm-mote'
     || state.kind === 'maple-leaf'
@@ -1260,7 +1561,7 @@ export function evaluateParticle(state: ParticleState, time: number, motionScale
     x += positiveModulo(time * 1.35 + state.phase * 2.2, 18) - 9;
     y += Math.sin(time * 1.37 + state.phase) * 0.22;
     z += Math.sin(time * 0.53 + state.phase) * 0.55;
-  } else if (state.kind === 'mint-mote') {
+  } else if (state.kind === 'mint-mote' || state.kind === 'gold-mote') {
     y += Math.sin(time * 0.49 + state.phase) * 0.34;
     x += Math.sin(time * 0.53 + state.phase) * 0.7;
     z += Math.cos(time * 0.47 + state.phase) * 0.36;
@@ -1269,29 +1570,36 @@ export function evaluateParticle(state: ParticleState, time: number, motionScale
     const phaseSeconds = state.phase / (Math.PI * 2) * cycleDuration;
     const localTime = positiveModulo(time + phaseSeconds, cycleDuration);
     visible = localTime < state.lifetime;
-    const progress = THREE.MathUtils.clamp(localTime / state.lifetime, 0, 1);
-    y = state.origin.y - state.fallDistance * progress;
+    const progress = THREE.MathUtils.clamp(localTime / Math.max(state.fallDuration, 0.0001), 0, 1);
+    y = Math.max(state.contactY, state.origin.y - state.fallDistance * progress);
+    const settleProgress = THREE.MathUtils.clamp(
+      (localTime - state.fallDuration) / Math.max(state.settleDuration, 0.0001),
+      0,
+      1,
+    );
+    opacity = visible ? 1 - settleProgress * settleProgress * (3 - 2 * settleProgress) : 0;
     const leafLike = state.kind === 'maple-leaf' || state.kind === 'ginkgo-fan';
     const swayRate = state.kind === 'maple-leaf' ? 0.86 : 0.55;
     const swayWidth = state.kind === 'ginkgo-fan' ? 0.72 : state.kind === 'snowflake' ? 0.48 : 0.56;
-    x += Math.sin(time * swayRate + state.phase) * swayWidth + state.drift * progress * 0.82;
-    z += Math.cos(time * 0.44 + state.phase) * (state.kind === 'ginkgo-fan' ? 0.7 : 0.34);
+    const fallingTime = Math.min(localTime, state.fallDuration);
+    x += Math.sin(fallingTime * swayRate + state.phase) * swayWidth + state.drift * progress * 0.82;
+    z += Math.cos(fallingTime * 0.44 + state.phase) * (state.kind === 'ginkgo-fan' ? 0.7 : 0.34);
     if (leafLike) {
-      rotationX = time * 1.7 + state.phase;
-      rotationZ = time * 1.15 + state.phase * 0.5;
+      rotationX = fallingTime * 1.7 + state.phase;
+      rotationZ = fallingTime * 1.15 + state.phase * 0.5;
     }
   }
   const blend = THREE.MathUtils.clamp(motionScale, 0, 1);
   x = THREE.MathUtils.lerp(state.origin.x, x, blend);
   if (!isDownwardFamily) y = THREE.MathUtils.lerp(state.origin.y, y, blend);
   z = THREE.MathUtils.lerp(state.origin.z, z, blend);
-  const visibilityScale = visible ? 1 : 0;
+  const visibilityScale = visible ? Math.max(0, opacity) : 0;
   return {
     x, y, z,
     scaleX: state.scale * visibilityScale,
     scaleY: state.scale * state.scaleY * visibilityScale,
     scaleZ: state.scale * state.scaleZ * visibilityScale,
-    rotationX, rotationY, rotationZ, colorMix: 0, visible,
+    rotationX, rotationY, rotationZ, colorMix: 0, opacity, visible,
   };
 }
 
@@ -1307,10 +1615,13 @@ export interface ParticleTrajectoryMetric {
   invisibleGapFrameCount: number;
   respawnAfterInvisibleGapCount: number;
   visibleRespawnTeleportCount: number;
+  visibleBelowBoardFrameCount: number;
+  minimumVisibleBottomClearance: number;
+  settleSeconds: number;
 }
 
 export interface TreeStructureEvidence {
-  theme: ThemeId;
+  theme: StudioThemeId;
   colorIndependent: true;
   particlesExcluded: true;
   projectionCellSize: number;
@@ -1329,7 +1640,7 @@ export interface TreeStructureEvidence {
   }>;
 }
 
-export function collectTreeStructureEvidence(themeId: ThemeId, bodies: BodyState[], projectionCellSize = 0.8): TreeStructureEvidence | null {
+export function collectTreeStructureEvidence(themeId: StudioThemeId, bodies: BodyState[], projectionCellSize = 0.8): TreeStructureEvidence | null {
   if (!['sakura', 'summer', 'maple', 'ginkgo', 'snow'].includes(themeId)) return null;
   const tree = bodies.filter((state) => state.semantic === 'trunk' || state.semantic === 'branch' || state.semantic === 'canopy');
   const byLineage = new Map<string, BodyState[]>();
@@ -1410,9 +1721,17 @@ export function measureParticleTrajectory(
   let invisibleGapFrameCount = 0;
   let respawnAfterInvisibleGapCount = 0;
   let visibleRespawnTeleportCount = 0;
+  let visibleBelowBoardFrameCount = 0;
+  let minimumVisibleBottomClearance = Infinity;
   for (let sample = 0; sample <= Math.ceil(sampleSeconds * sampleHz); sample += 1) {
     const evaluated = evaluateParticle(state, sample * step, 1);
     if (!evaluated.visible) invisibleGapFrameCount += 1;
+    if (evaluated.visible) {
+      const bottom = evaluated.y - evaluated.scaleY * 0.5;
+      const clearance = bottom - state.boardSurfaceY;
+      minimumVisibleBottomClearance = Math.min(minimumVisibleBottomClearance, clearance);
+      if (clearance < -epsilon) visibleBelowBoardFrameCount += 1;
+    }
     if (previous?.visible && evaluated.visible) {
       const deltaY = evaluated.y - previous.y;
       netVerticalDisplacement += deltaY;
@@ -1438,6 +1757,9 @@ export function measureParticleTrajectory(
     invisibleGapFrameCount,
     respawnAfterInvisibleGapCount,
     visibleRespawnTeleportCount,
+    visibleBelowBoardFrameCount,
+    minimumVisibleBottomClearance: fixed(Number.isFinite(minimumVisibleBottomClearance) ? minimumVisibleBottomClearance : 0),
+    settleSeconds: fixed(state.settleDuration),
   };
 }
 
@@ -1457,7 +1779,7 @@ function percentile(values: number[], amount: number): number {
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * amount) - 1)];
 }
 
-export function collectV8Metrics(themeId: ThemeId, bodies: BodyState[], particles: ParticleState[]): V8HeroMetrics {
+export function collectV8Metrics(themeId: StudioThemeId, bodies: BodyState[], particles: ParticleState[]): V8HeroMetrics {
   const heroBodies = bodies.filter((state) => state.semantic !== 'sun-support' && state.semantic !== 'wanderer-garden');
   const cellEdges = heroBodies.map((state) => state.cellEdge).sort((a, b) => a - b);
   const medianCellEdge = cellEdges[Math.floor(cellEdges.length * 0.5)] ?? MICRO_EDGE;
@@ -1473,7 +1795,7 @@ export function collectV8Metrics(themeId: ThemeId, bodies: BodyState[], particle
     fakeDetailVoxelCount: 0,
   };
   const treeIds: ThemeId[] = ['sakura', 'summer', 'maple', 'ginkgo', 'snow'];
-  const treeStates = treeIds.includes(themeId) ? heroBodies : [];
+  const treeStates = treeIds.some((id) => id === themeId) ? heroBodies : [];
   const treeMotion = treeStates.length ? {
     layerCount: new Set(treeStates.map((state) => state.motionLayer)).size,
     phaseGroupCount: new Set(treeStates.filter((state) => state.motionLayer !== 'anchored').map((state) => state.motionGroup)).size,
@@ -1525,6 +1847,10 @@ export function collectV8Metrics(themeId: ThemeId, bodies: BodyState[], particle
     invisibleGapFrameCount: particleMetrics.reduce((sum, metric) => sum + metric.invisibleGapFrameCount, 0),
     respawnAfterInvisibleGapCount: particleMetrics.reduce((sum, metric) => sum + metric.respawnAfterInvisibleGapCount, 0),
     visibleRespawnTeleportCount: particleMetrics.reduce((sum, metric) => sum + metric.visibleRespawnTeleportCount, 0),
+    visibleBelowBoardFrameCount: particleMetrics.reduce((sum, metric) => sum + metric.visibleBelowBoardFrameCount, 0),
+    minimumVisibleBottomClearance: fixed(Math.min(...particleMetrics.map((metric) => metric.minimumVisibleBottomClearance))),
+    minimumSettleSeconds: fixed(Math.min(...particleMetrics.map((metric) => metric.settleSeconds))),
+    maximumSettleSeconds: fixed(Math.max(...particleMetrics.map((metric) => metric.settleSeconds))),
   } : null;
   const sunLiving = themeId === 'sunset' ? {
     detailLinearScale: detail.effectiveLinearScale,
@@ -1577,8 +1903,23 @@ export function collectV8Metrics(themeId: ThemeId, bodies: BodyState[], particle
       originalConstruction: true,
     };
   }
+  let kitty: V8HeroMetrics['kitty'] = null;
+  if (themeId === 'kitty') {
+    const character = heroBodies.filter((state) => state.semantic.startsWith('kitty-'));
+    kitty = {
+      originalConstruction: true,
+      palette: ['orange-gold', 'cream-white', 'dark-brown'],
+      semanticPartCount: new Set(character.map((state) => state.semantic)).size,
+      motionModel: 'session-seeded-natural-lively-v1',
+      sessionOwnedRuntime: true,
+      finiteCycle: false,
+      fixedWaypointOrder: false,
+      mandatoryOriginReturn: false,
+      actions: ['idle', 'look', 'walk', 'run', 'turn', 'dash'] as KittyActionMetric[],
+    };
+  }
   return {
-    detail, treeMotion, treeStructure, particleTrajectory, sunLiving, ocean, wanderer,
+    detail, treeMotion, treeStructure, particleTrajectory, sunLiving, ocean, wanderer, kitty,
     scanMotion: { dampingRatio: SCAN_MOTION_DAMPING, phaseContinues: true, geometryReplacement: false, colorReplacement: false },
   };
 }

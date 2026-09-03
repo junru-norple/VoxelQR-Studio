@@ -16,6 +16,7 @@ import {
   WANDERER_SILHOUETTE_DEPTH_SCALE,
   type BodyState,
 } from '../../src/scene/v8Hero';
+import { R4_WANDERER_LINEAR_SCALE } from '../../src/scene/r4CharacterContract';
 import {
   COMPACT_SCAN_POSTFILTER_PX,
   TOP_DOWN_EXPORT_MARGIN_MODULES,
@@ -183,22 +184,22 @@ describe('v8.4 public live-scene label', () => {
   });
 });
 
-describe('v8.4 Pixel Wanderer 90-percent character revision', () => {
-  it('applies one exact XYZ scale only to the character while retaining theme accents', () => {
+describe('v1.1.0 R5 Pixel Wanderer preserves the R4 character beneath the corrected scarf', () => {
+  it('retains all 25 accepted non-scarf parts and accents at the exact R3 × 0.70 transform plus eight R5 scarf parts', () => {
     const hero = buildV8Hero(qr, 'wanderer', seededRandom(hashSeed('wanderer:hero:v8.2')));
     const character = hero.bodies.filter((state) => isHeroAreaSemantic('wanderer', state.semantic));
     const garden = hero.bodies.filter((state) => state.semantic === 'wanderer-garden');
     const median = (values: number[]) => [...values].sort((first, second) => first - second)[Math.floor(values.length * 0.5)];
 
-    expect(WANDERER_CHARACTER_SCALE).toBe(0.9);
-    expect(WANDERER_SILHOUETTE_DEPTH_SCALE).toBe(1.21);
+    expect(WANDERER_CHARACTER_SCALE).toBe(R4_WANDERER_LINEAR_SCALE);
+    expect(WANDERER_SILHOUETTE_DEPTH_SCALE).toBe(1);
     expect(HERO_REFERENCE_MAJOR_AXIS.wanderer).toBeCloseTo(34.748 * WANDERER_CHARACTER_SCALE, 12);
-    expect(character.length).toBeGreaterThan(0);
+    expect(character.filter((state) => state.semantic !== 'wanderer-scarf')).toHaveLength(25);
+    expect(character.filter((state) => state.semantic === 'wanderer-scarf')).toHaveLength(8);
+    expect(character).toHaveLength(33);
+    expect(new Set(character.map((state) => state.part)).size).toBe(character.length);
     expect(garden.length).toBeGreaterThan(0);
-    expect(median(character.map((state) => state.cellEdge))).toBeCloseTo(
-      MICRO_EDGE * WANDERER_AUTHORING_SCALE * WANDERER_CHARACTER_SCALE,
-      12,
-    );
+    expect(median(character.map((state) => state.cellEdge))).toBeGreaterThan(MICRO_EDGE * 4);
     expect(median(garden.map((state) => state.cellEdge))).toBeCloseTo(MICRO_EDGE * WANDERER_AUTHORING_SCALE, 12);
   });
 });

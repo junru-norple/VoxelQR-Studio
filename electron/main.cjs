@@ -49,7 +49,15 @@ function createWindow() {
     console.error('RENDER_PROCESS_GONE', details.reason, details.exitCode);
   });
   window.once('ready-to-show', () => window.show());
-  window.loadFile(path.join(__dirname, '..', '_workspace', 'build', 'desktop', 'index.html')).catch((error) => console.error('WINDOW_LOAD_REJECTED', error));
+  const sourceRoot = path.join(__dirname, '..');
+  const sourceParent = path.dirname(sourceRoot);
+  const developmentWorkspace = path.basename(sourceParent).toLowerCase() === '_workspace'
+    ? sourceParent
+    : path.join(sourceRoot, '_workspace');
+  const entryPoint = app.isPackaged
+    ? path.join(__dirname, '..', 'build', 'desktop', 'index.html')
+    : path.join(developmentWorkspace, 'build', 'v1.1.0-r6', 'desktop', 'index.html');
+  window.loadFile(entryPoint).catch((error) => console.error('WINDOW_LOAD_REJECTED', error));
 }
 
 app.whenReady().then(() => {

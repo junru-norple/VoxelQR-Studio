@@ -9,13 +9,11 @@ import {
   collectV8Metrics,
   evaluateBody,
   evaluateParticle,
-  HERO_AREA_AUTHORING_TARGET,
-  HERO_AREA_REQUIRED_MAX,
-  HERO_AREA_REQUIRED_MIN,
+  HERO_AREA_BANDS,
   HERO_AREA_SAMPLE_HZ,
   HERO_AREA_WINDOW_SECONDS,
   HERO_REFERENCE_GRID_SIZE,
-  HERO_REFERENCE_MAJOR_AXIS,
+  HERO_REFERENCE_MAJOR_AXIS_V11,
   HERO_SCALE_TRANSITION_MS,
   heroScaleForGrid,
   isHeroAreaSemantic,
@@ -25,7 +23,22 @@ import {
   type ParticleState as V8ParticleState,
   type V8HeroMetrics,
 } from './v8Hero';
-import { THEMES, THEME_IDS, type ThemeDefinition, type ThemeId } from '../themes';
+import { THEMES, STUDIO_THEME_IDS, type StudioThemeId, type ThemeDefinition, type ThemeId } from '../themes';
+import {
+  advanceKittyNaturalMotion,
+  cloneKittyNaturalMotion,
+  createKittyNaturalMotion,
+  createProductionKittySessionSeed,
+  kittyNaturalMotionDiagnostic,
+  kittyNavigationGeometry,
+  reprojectKittyNaturalMotionForGrid,
+  sampleKittyNaturalPose,
+  type KittyNaturalMotionDiagnostic,
+  type KittyNaturalMotionState,
+  type KittyNaturalPose,
+} from './r6KittyNaturalMotion';
+import { R3_KITTY_FOOT_CONTACT_Y } from './r4CharacterContract';
+import { R5_KITTY_LINEAR_SCALE_FROM_R4, r5KittyScaleForGrid } from './r5CharacterContract';
 
 const TERRAIN_CAPACITY = 36_000;
 const MODULE_CAPACITY = 18_000;
@@ -145,46 +158,141 @@ interface CameraState {
   zoom: number;
 }
 
+interface KittyScanSnapshot {
+  clockSeconds: number;
+  normalizedTime: null;
+  sessionSeed: string;
+  seedSource: KittyNaturalMotionState['seedSource'];
+  pose: KittyNaturalPose;
+  intent: KittyNaturalMotionState['intent'];
+  steering: KittyNaturalMotionDiagnostic['steering'];
+  heatmap: KittyNaturalMotionDiagnostic['heatmap'];
+  recentTargets: KittyNaturalMotionDiagnostic['recentTargets'];
+  pathTarget: KittyNaturalMotionDiagnostic['steering']['target'];
+  rngState: KittyNaturalMotionDiagnostic['rngState'];
+  motionState: KittyNaturalMotionState;
+  groupScale: [number, number, number];
+  bodyMatrices: number[][];
+  darkCapMatrices: number[][];
+  lightCapMatrices: number[][];
+  particleMatrices: number[][];
+}
+
+interface KittyRestoreEvidence {
+  snapshot: KittyScanSnapshot;
+  restoredClockSeconds: number;
+  restoredPose: KittyNaturalPose;
+  clockExact: boolean;
+  poseExact: boolean;
+  intentExact: boolean;
+  steeringExact: boolean;
+  heatmapExact: boolean;
+  recentTargetsExact: boolean;
+  rngStateExact: boolean;
+  bodyMatricesExact: boolean;
+  darkCapMatricesExact: boolean;
+  lightCapMatricesExact: boolean;
+  particleMatricesExact: boolean;
+  seedExact: boolean;
+}
+
 export interface ProjectedCompositionMetric {
   source: 'actual-production-frame';
-  theme: ThemeId;
+  measurement: 'screen-space-axis-aligned-bounding-box-area';
+  formula: 'area(screen-space AABB of character) / area(screen-space AABB of active QR board)';
+  theme: StudioThemeId;
   gridSize: number;
   frame: number;
   canvas: { width: number; height: number };
+  inspectionAngleDegrees: number | null;
   semanticVoxelCount: number;
+  characterBoundsWorld: { min: [number, number, number]; max: [number, number, number]; size: [number, number, number] };
+  activeQrBoundsWorld: { min: [number, number, number]; max: [number, number, number]; size: [number, number, number] };
+  characterBoundsPx: { min: [number, number]; max: [number, number]; size: [number, number] };
   heroBoundsPx: { min: [number, number]; max: [number, number]; size: [number, number] };
   qrBoundsPx: { min: [number, number]; max: [number, number]; size: [number, number] };
+  characterAreaPx: number;
+  activeQrAreaPx: number;
+  characterVisualOccupancy: number;
+  characterWorldMajorAxis: number;
   heroProjectedMajorAxisPx: number;
   qrProjectedMajorAxisPx: number;
   projectedHeroToQrRatio: number;
+  camera: {
+    projection: 'orthographic';
+    fov: null;
+    position: [number, number, number];
+    quaternion: [number, number, number, number];
+    up: [number, number, number];
+    target: [number, number, number];
+    zoom: number;
+    near: number;
+    far: number;
+    frustum: { left: number; right: number; top: number; bottom: number };
+    viewMatrix: number[];
+    projectionMatrix: number[];
+  };
 }
 
 export interface HeroAreaFrameMetric {
   source: 'production-scene-semantic-id-pass';
-  maskSource: 'dual-production-geometry-masks-semantic-subject-and-active-qr-plane';
+  maskSource:
+    | 'dual-production-geometry-masks-semantic-subject-and-active-qr-plane'
+    | 'deterministic-object-id-silhouette-and-full-physical-board-top-mask';
+  formula:
+    | 'subject pixels intersecting active QR mask / active QR mask pixels'
+    | 'full projected character silhouette pixels / full physical board top mask pixels';
   sceneUuid: string;
   cameraUuid: string;
-  theme: ThemeId;
+  theme: StudioThemeId;
   payload: string;
   gridSize: number;
   timeSeconds: number;
   resolution: number;
   qrPixels: number;
   heroIntersectionPixels: number;
+  boardPixels: number;
+  silhouettePixels: number;
   ratio: number;
   semanticVoxelCount: number;
   excludedSemanticVoxelCount: number;
-  cameraMode: 'production-top-down-scan-camera' | 'production-default-opening-camera';
-  viewportExtraction: 'active-qr-projected-mask-intersection';
+  subjectLinearScaleMultiplier: number;
+  uniformScaleAnchorWorld: [number, number, number] | null;
+  cameraMode:
+    | 'production-top-down-scan-camera'
+    | 'production-default-opening-camera'
+    | 'production-r4-fixed-three-quarter-explore-camera';
+  viewportExtraction:
+    | 'active-qr-projected-mask-intersection'
+    | 'fixed-explore-full-frame-no-aabb';
   antiAliasIndependent: true;
   reduction: 'gpu-float32-exact-sum' | 'cpu-binary-readback-fallback';
+  viewport: {
+    width: number;
+    height: number;
+    devicePixelRatio: number;
+    rendererPixelRatio: number;
+    drawingBufferWidth: number;
+    drawingBufferHeight: number;
+  };
+  camera: ProjectedCompositionMetric['camera'];
+  boardMask: {
+    source: 'production-physical-board-top-plane';
+    includesQuietZone: boolean;
+    quietZoneModules: number;
+    sideWorld: number;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+    matrixWorld: number[];
+  };
   maskDataUrl?: string;
   qrMaskDataUrl?: string;
 }
 
 export interface HeroAreaWindowMetric {
   source: HeroAreaFrameMetric['source'];
-  theme: ThemeId;
+  theme: StudioThemeId;
   payload: string;
   gridSize: number;
   startTimeSeconds: number;
@@ -196,10 +304,12 @@ export interface HeroAreaWindowMetric {
   requiredMin: number;
   requiredMax: number;
   authoringTarget: number;
+  subjectLinearScaleMultiplier: number;
   ratioTrace: number[];
   minRatio: number;
   maxRatio: number;
   medianRatio: number;
+  bandPass: boolean;
   minFrame: HeroAreaFrameMetric;
   maxFrame: HeroAreaFrameMetric;
   worstFrame: HeroAreaFrameMetric;
@@ -212,7 +322,7 @@ export interface GardenStats {
   progress: number;
   mode: 'scene' | 'scan';
   payload: string;
-  theme: ThemeId;
+  theme: StudioThemeId;
   sceneUuid: string;
   cameraUuid: string;
   canvasId: string;
@@ -271,7 +381,7 @@ export interface GardenStats {
     oceanWaveDirection: 'positive-x';
     oceanWaveSamples: number[];
     treeVolume: null | {
-      theme: ThemeId;
+      theme: StudioThemeId;
       canopyBounds: { min: number[]; max: number[]; size: number[] };
       canopyDepthRatio: number;
       canopyVoxelCount: number;
@@ -321,6 +431,8 @@ export interface GardenStats {
     activeParticleCount: number;
     totalParticleCount: number;
     fidelityReason: string;
+    slowFrameBudget: number;
+    recoveryFrameBudget: number;
     heroResolutionPreserved: true;
     qrResolutionPreserved: true;
     hysteresisEnabled: true;
@@ -373,6 +485,7 @@ export class VoxelGarden {
       qrTexture: { value: null as THREE.Texture | null },
       inputSize: { value: new THREE.Vector2(1, 1) },
       combineMasks: { value: 1 },
+      clipSubjectToBoard: { value: 1 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -387,6 +500,7 @@ export class VoxelGarden {
       uniform sampler2D qrTexture;
       uniform vec2 inputSize;
       uniform float combineMasks;
+      uniform float clipSubjectToBoard;
       varying vec2 vUv;
       void main() {
         vec2 outputCell = floor(gl_FragCoord.xy);
@@ -405,7 +519,11 @@ export class VoxelGarden {
           float q1 = step(0.5, texture2D(qrTexture, uv1).r);
           float q2 = step(0.5, texture2D(qrTexture, uv2).r);
           float q3 = step(0.5, texture2D(qrTexture, uv3).r);
-          gl_FragColor = vec4(h0 * q0 + h1 * q1 + h2 * q2 + h3 * q3, q0 + q1 + q2 + q3, 0.0, 1.0);
+          float s0 = h0 * mix(1.0, q0, clipSubjectToBoard);
+          float s1 = h1 * mix(1.0, q1, clipSubjectToBoard);
+          float s2 = h2 * mix(1.0, q2, clipSubjectToBoard);
+          float s3 = h3 * mix(1.0, q3, clipSubjectToBoard);
+          gl_FragColor = vec4(s0 + s1 + s2 + s3, q0 + q1 + q2 + q3, 0.0, 1.0);
         } else {
           vec2 sum = texture2D(inputTexture, uv0).rg
             + texture2D(inputTexture, uv1).rg
@@ -433,7 +551,7 @@ export class VoxelGarden {
   private readonly terrainMesh = new THREE.InstancedMesh(this.roundedGeometry, this.terrainMaterial, TERRAIN_CAPACITY);
   private readonly qrBodyMesh = new THREE.InstancedMesh(this.roundedGeometry, this.qrBodyMaterial, MODULE_CAPACITY);
   private readonly qrCapMesh = new THREE.InstancedMesh(this.capGeometry, this.qrCapMaterial, MODULE_CAPACITY);
-  private readonly runtimes = new Map<ThemeId, HeroRuntime>();
+  private readonly runtimes = new Map<StudioThemeId, HeroRuntime>();
   private readonly platformMaterial = new THREE.MeshStandardMaterial({ color: '#fbf4df', roughness: 0.96, metalness: 0 });
   private readonly platform = new THREE.Mesh(new RoundedBoxGeometry(1, 1, 1, 1, 0.1), this.platformMaterial);
   private readonly shadowTexture: THREE.CanvasTexture;
@@ -463,6 +581,10 @@ export class VoxelGarden {
   private slowFrameBudget = 0;
   private recoveryFrameBudget = 0;
   private elapsed = 0;
+  private kittyNaturalMotion: KittyNaturalMotionState;
+  private kittyDiagnosticMotion: KittyNaturalMotionState | null = null;
+  private kittyScanSnapshot: KittyScanSnapshot | null = null;
+  private kittyLastRestoreEvidence: KittyRestoreEvidence | null = null;
   private progress = 0;
   private targetProgress = 0;
   private requestedMode: 'scene' | 'scan' = 'scene';
@@ -477,10 +599,15 @@ export class VoxelGarden {
   private moduleCount = 0;
   private diagnosticAnimationTime: number | null = null;
   private structureEvidenceMode: 'normal' | 'color-structure' | 'grayscale' | 'leafless' = 'normal';
+  private inspectionAngleDegrees: number | null = null;
 
-  constructor(canvas: HTMLCanvasElement, qr: CanonicalQr, themeId: ThemeId) {
+  constructor(canvas: HTMLCanvasElement, qr: CanonicalQr, themeId: StudioThemeId) {
     this.qr = qr;
     this.theme = THEMES[themeId];
+    this.kittyNaturalMotion = createKittyNaturalMotion(
+      createProductionKittySessionSeed(),
+      'production-crypto',
+    );
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio * 0.8, 1.2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -528,7 +655,7 @@ export class VoxelGarden {
     this.qrCapMesh.frustumCulled = false;
     this.qrCapMesh.renderOrder = 3;
 
-    for (const id of THEME_IDS) {
+    for (const id of STUDIO_THEME_IDS) {
       const definition = THEMES[id];
       const group = new THREE.Group();
       const bodyCapacity = id === 'ocean' ? OCEAN_HERO_BODY_CAPACITY : HERO_BODY_CAPACITY;
@@ -587,18 +714,27 @@ export class VoxelGarden {
     this.fillLight.position.set(22, 16, -24);
 
     this.onPointerDown = () => {
-      if (this.requestedMode === 'scene') this.manualCameraAdjusted = true;
+      if (this.requestedMode === 'scene') {
+        this.manualCameraAdjusted = true;
+        this.inspectionAngleDegrees = null;
+      }
       this.interactionUntil = performance.now() + 900;
       canvas.classList.add('is-dragging');
     };
     this.onPointerMove = (event) => {
       if (event.buttons <= 0) return;
-      if (this.requestedMode === 'scene') this.manualCameraAdjusted = true;
+      if (this.requestedMode === 'scene') {
+        this.manualCameraAdjusted = true;
+        this.inspectionAngleDegrees = null;
+      }
       this.pointerMoveAt = performance.now();
       this.interactionUntil = performance.now() + 900;
     };
     this.onWheel = () => {
-      if (this.requestedMode === 'scene') this.manualCameraAdjusted = true;
+      if (this.requestedMode === 'scene') {
+        this.manualCameraAdjusted = true;
+        this.inspectionAngleDegrees = null;
+      }
       this.interactionUntil = performance.now() + 900;
     };
     this.onControlStart = () => { this.interactionUntil = performance.now() + 900; };
@@ -650,12 +786,13 @@ export class VoxelGarden {
     this.hemisphere.groundColor.set(this.theme.groundEdge);
     this.keyLight.color.set(this.theme.light[0]);
     this.fillLight.color.set(this.theme.light[1]);
-    for (const id of THEME_IDS) {
+    for (const id of STUDIO_THEME_IDS) {
       const runtime = this.runtimes.get(id);
       if (runtime) runtime.group.visible = id === this.theme.id;
     }
     this.configureBase();
     this.configureHero(this.theme.id);
+    this.syncKittyRenderVisibility();
     this.refreshDefaultCamera(!this.manualCameraAdjusted && this.requestedMode === 'scene' && this.progress <= 0.001);
   }
 
@@ -714,14 +851,14 @@ export class VoxelGarden {
     this.scanZoom = this.computeScanZoom();
   }
 
-  private configureHero(themeId: ThemeId): void {
+  private configureHero(themeId: StudioThemeId): void {
     const runtime = this.runtimes.get(themeId);
     if (!runtime) return;
     runtime.bodies.length = 0;
     runtime.darkCapStates.length = 0;
     runtime.lightCapStates.length = 0;
     runtime.particleStates.length = 0;
-    const targetScale = heroScaleForGrid(this.qr.size);
+    const targetScale = this.responsiveHeroScale(themeId);
     const currentScale = runtime.group.scale.x;
     const scaleChanging = this.requestedMode === 'scene' && Math.abs(currentScale - targetScale) > 0.00001;
     runtime.scaleStart = scaleChanging ? currentScale : targetScale;
@@ -731,7 +868,10 @@ export class VoxelGarden {
     runtime.scaleSettledAt = scaleChanging ? runtime.scaleStartedAt + runtime.scaleTransitionMs : runtime.scaleStartedAt;
     runtime.particles.visible = !scaleChanging;
     runtime.group.scale.setScalar(runtime.scaleCurrent);
-    const random = seededRandom(hashSeed(`${themeId}:hero:v8.2`));
+    const seed = themeId === 'kitty'
+      ? `${themeId}:${this.qr.payload}:hero:v1.1.0`
+      : `${themeId}:hero:v8.2`;
+    const random = seededRandom(hashSeed(seed));
     const hero = buildV8Hero(this.qr, themeId, random);
     for (const body of hero.bodies) runtime.bodies.push(body);
     for (const cap of hero.darkCaps) runtime.darkCapStates.push(cap);
@@ -989,15 +1129,47 @@ export class VoxelGarden {
     return state ? sampleOceanSurface(state as V8BodyState, this.elapsed) : this.waveHeightAt(phase, this.elapsed);
   }
 
-  private updateHeroRuntime(runtime: HeroRuntime, forceColors = false): void {
+  private kittyMotionStateAt(timeOverride?: number): KittyNaturalMotionState {
+    if (this.kittyScanSnapshot) return this.kittyScanSnapshot.motionState;
+    const requestedTime = timeOverride ?? this.diagnosticAnimationTime;
+    if (requestedTime === null || requestedTime === undefined) return this.kittyNaturalMotion;
+    const currentDiagnosticTime = this.kittyDiagnosticMotion
+      ? this.kittyDiagnosticMotion.elapsedSeconds + this.kittyDiagnosticMotion.accumulatorSeconds
+      : -1;
+    if (
+      !this.kittyDiagnosticMotion
+      || this.kittyDiagnosticMotion.sessionSeed !== this.kittyNaturalMotion.sessionSeed
+      || requestedTime + 1e-9 < currentDiagnosticTime
+    ) {
+      this.kittyDiagnosticMotion = createKittyNaturalMotion(
+        this.kittyNaturalMotion.sessionSeed,
+        this.kittyNaturalMotion.seedSource,
+      );
+    }
+    const diagnosticTime = this.kittyDiagnosticMotion.elapsedSeconds
+      + this.kittyDiagnosticMotion.accumulatorSeconds;
+    if (requestedTime > diagnosticTime) {
+      advanceKittyNaturalMotion(this.kittyDiagnosticMotion, requestedTime - diagnosticTime);
+    }
+    return this.kittyDiagnosticMotion;
+  }
+
+  private kittyPoseAt(timeOverride?: number): KittyNaturalPose {
+    return sampleKittyNaturalPose(this.kittyMotionStateAt(timeOverride), this.qr.size);
+  }
+
+  private updateHeroRuntime(runtime: HeroRuntime, forceColors = false, timeOverride?: number): void {
     let colorsChanged = forceColors;
+    const heroTime = this.heroAnimationTime(timeOverride);
+    const particleTime = this.theme.id === 'kitty' ? heroTime : timeOverride ?? this.elapsed;
     const evidenceModeActive = this.structureEvidenceMode !== 'normal';
     const grayscaleEvidence = this.structureEvidenceMode === 'grayscale' || this.structureEvidenceMode === 'leafless';
     runtime.darkCaps.visible = !evidenceModeActive;
     runtime.lightCaps.visible = !evidenceModeActive;
     const motionScale = THREE.MathUtils.lerp(1, SCAN_MOTION_DAMPING, smoother(this.progress));
+    const kittyPose = this.theme.id === 'kitty' ? this.kittyPoseAt(timeOverride) : undefined;
     runtime.bodies.forEach((state, index) => {
-      const evaluated = evaluateBody(state as V8BodyState, this.theme.id, this.elapsed, motionScale);
+      const evaluated = evaluateBody(state as V8BodyState, this.theme.id, heroTime, motionScale, kittyPose);
       if (grayscaleEvidence) {
         const evidenceColor = state.semantic === 'trunk'
           ? '#202724'
@@ -1032,22 +1204,24 @@ export class VoxelGarden {
       states.forEach((state, index) => {
         if (state.sourceBodyIndex !== undefined) {
           const source = runtime.bodies[state.sourceBodyIndex];
-          const evaluated = evaluateBody(source as V8BodyState, this.theme.id, this.elapsed, motionScale);
+          const evaluated = evaluateBody(source as V8BodyState, this.theme.id, heroTime, motionScale, kittyPose);
           const exploreX = evaluated.x + (state.offsetX ?? 0);
           const exploreZ = evaluated.z + (state.offsetZ ?? 0);
+          const scanOnlyCharacterCap = this.theme.id === 'wanderer' && source.semantic.startsWith('wanderer-');
+          const capReveal = scanOnlyCharacterCap ? scanAmount : 1;
           this.dummy.position.set(
             THREE.MathUtils.lerp(exploreX, state.scanX ?? exploreX, scanAmount),
             evaluated.y + evaluated.scaleY * 0.5 + CAP_HEIGHT * 0.5,
             THREE.MathUtils.lerp(exploreZ, state.scanZ ?? exploreZ, scanAmount),
           );
           this.dummy.scale.set(
-            THREE.MathUtils.lerp(state.scaleX ?? 1, state.scanScaleX ?? state.scaleX ?? 1, scanAmount),
+            THREE.MathUtils.lerp(state.scaleX ?? 1, state.scanScaleX ?? state.scaleX ?? 1, scanAmount) * capReveal,
             1,
-            THREE.MathUtils.lerp(state.scaleZ ?? 1, state.scanScaleZ ?? state.scaleZ ?? 1, scanAmount),
+            THREE.MathUtils.lerp(state.scaleZ ?? 1, state.scanScaleZ ?? state.scaleZ ?? 1, scanAmount) * capReveal,
           );
         } else {
           const phase = state.phase ?? 0;
-          const y = state.wave ? 0.25 + this.waveHeight(phase) + CAP_HEIGHT * 0.5 : (state.baseY ?? 0) + Math.sin(this.elapsed * 0.68 + phase) * (state.amplitude ?? 0);
+          const y = state.wave ? 0.25 + this.waveHeightAt(phase, heroTime) + CAP_HEIGHT * 0.5 : (state.baseY ?? 0) + Math.sin(heroTime * 0.68 + phase) * (state.amplitude ?? 0);
           this.dummy.position.set(state.x ?? 0, y, state.z ?? 0);
           this.dummy.scale.set(1, 1, 1);
         }
@@ -1061,7 +1235,7 @@ export class VoxelGarden {
     updateCaps(runtime.lightCaps, runtime.lightCapStates);
 
     runtime.particleStates.forEach((state, index) => {
-      const evaluated = evaluateParticle(state as V8ParticleState, this.elapsed, motionScale);
+      const evaluated = evaluateParticle(state as V8ParticleState, particleTime, motionScale);
       this.dummy.position.set(evaluated.x, evaluated.y, evaluated.z);
       this.dummy.scale.set(
         evidenceModeActive ? 0 : evaluated.scaleX * motionScale,
@@ -1084,8 +1258,9 @@ export class VoxelGarden {
         max.y = Math.max(max.y, runtime.scaleCurrent * 1.65);
       } else {
         const motionScale = THREE.MathUtils.lerp(1, SCAN_MOTION_DAMPING, smoother(this.progress));
+        const kittyPose = this.theme.id === 'kitty' ? this.kittyPoseAt() : undefined;
         for (const state of runtime.bodies) {
-        const evaluated = evaluateBody(state as V8BodyState, this.theme.id, this.elapsed, motionScale);
+        const evaluated = evaluateBody(state as V8BodyState, this.theme.id, this.heroAnimationTime(), motionScale, kittyPose);
         const scale = runtime.scaleCurrent;
         min.x = Math.min(min.x, (evaluated.x - evaluated.scaleX * 0.5) * scale);
         min.y = Math.min(min.y, (evaluated.y - evaluated.scaleY * 0.5) * scale);
@@ -1151,7 +1326,7 @@ export class VoxelGarden {
 
   private treeVolumeMetric(runtime: HeroRuntime): GardenStats['visual']['treeVolume'] {
     const treeIds: ThemeId[] = ['sakura', 'summer', 'maple', 'ginkgo', 'snow'];
-    if (!treeIds.includes(this.theme.id)) return null;
+    if (!treeIds.some((id) => id === this.theme.id)) return null;
     const canopy = runtime.bodies.filter((state) => state.semantic === 'canopy');
     const canopyBounds = this.bodyBounds(runtime.bodies, 'canopy');
     const [width, , depth] = canopyBounds.size;
@@ -1240,40 +1415,158 @@ export class VoxelGarden {
     };
   }
 
+  private syncKittyRenderVisibility(): void {
+    const runtime = this.runtimes.get('kitty');
+    if (!runtime) return;
+    const active = this.theme.id === 'kitty';
+    runtime.group.visible = active && this.kittyScanSnapshot === null && this.requestedMode === 'scene';
+  }
+
+  private readInstancedMatrices(mesh: THREE.InstancedMesh, count: number): number[][] {
+    const matrix = new THREE.Matrix4();
+    return Array.from({ length: count }, (_, index) => {
+      mesh.getMatrixAt(index, matrix);
+      return matrix.toArray();
+    });
+  }
+
+  private captureKittyScanSnapshot(): void {
+    if (this.theme.id !== 'kitty' || this.kittyScanSnapshot) return;
+    const runtime = this.runtimes.get('kitty');
+    const motionState = cloneKittyNaturalMotion(this.kittyMotionStateAt());
+    const clockSeconds = motionState.elapsedSeconds;
+    if (runtime) this.updateHeroRuntime(runtime, false, clockSeconds);
+    const pose = sampleKittyNaturalPose(motionState, this.qr.size);
+    const diagnostic = kittyNaturalMotionDiagnostic(motionState);
+    this.kittyScanSnapshot = {
+      clockSeconds,
+      normalizedTime: null,
+      sessionSeed: motionState.sessionSeed,
+      seedSource: motionState.seedSource,
+      pose,
+      intent: motionState.intent,
+      steering: diagnostic.steering,
+      heatmap: diagnostic.heatmap,
+      recentTargets: diagnostic.recentTargets,
+      pathTarget: diagnostic.steering.target,
+      rngState: diagnostic.rngState,
+      motionState,
+      groupScale: runtime ? runtime.group.scale.toArray() as [number, number, number] : [1, 1, 1],
+      bodyMatrices: runtime ? this.readInstancedMatrices(runtime.body, runtime.body.count) : [],
+      darkCapMatrices: runtime ? this.readInstancedMatrices(runtime.darkCaps, runtime.darkCaps.count) : [],
+      lightCapMatrices: runtime ? this.readInstancedMatrices(runtime.lightCaps, runtime.lightCaps.count) : [],
+      particleMatrices: runtime ? this.readInstancedMatrices(runtime.particles, runtime.particles.count) : [],
+    };
+    this.kittyLastRestoreEvidence = null;
+    this.syncKittyRenderVisibility();
+  }
+
+  private restoreKittyScanSnapshotIfReady(): void {
+    if (
+      !this.kittyScanSnapshot
+      || this.requestedMode !== 'scene'
+      || this.progress > 0.001
+    ) return;
+    const snapshot = this.kittyScanSnapshot;
+    const runtime = this.runtimes.get('kitty');
+    if (this.kittyNaturalMotion.sessionSeed !== snapshot.sessionSeed) {
+      throw new Error('KITTY_SCAN_SNAPSHOT_SEED_DRIFT');
+    }
+    this.kittyNaturalMotion = cloneKittyNaturalMotion(snapshot.motionState);
+    this.kittyDiagnosticMotion = null;
+    if (runtime) this.updateHeroRuntime(runtime, false, snapshot.clockSeconds);
+    const restoredPose = sampleKittyNaturalPose(this.kittyNaturalMotion, this.qr.size);
+    const restoredDiagnostic = kittyNaturalMotionDiagnostic(this.kittyNaturalMotion);
+    this.kittyLastRestoreEvidence = {
+      snapshot,
+      restoredClockSeconds: this.kittyNaturalMotion.elapsedSeconds,
+      restoredPose,
+      clockExact: this.kittyNaturalMotion.elapsedSeconds === snapshot.clockSeconds,
+      poseExact: JSON.stringify(restoredPose) === JSON.stringify(snapshot.pose),
+      intentExact: this.kittyNaturalMotion.intent === snapshot.intent,
+      steeringExact: JSON.stringify(restoredDiagnostic.steering) === JSON.stringify(snapshot.steering),
+      heatmapExact: JSON.stringify(restoredDiagnostic.heatmap) === JSON.stringify(snapshot.heatmap),
+      recentTargetsExact: JSON.stringify(restoredDiagnostic.recentTargets) === JSON.stringify(snapshot.recentTargets),
+      rngStateExact: JSON.stringify(restoredDiagnostic.rngState) === JSON.stringify(snapshot.rngState),
+      bodyMatricesExact: runtime ? JSON.stringify(this.readInstancedMatrices(runtime.body, runtime.body.count)) === JSON.stringify(snapshot.bodyMatrices) : snapshot.bodyMatrices.length === 0,
+      darkCapMatricesExact: runtime ? JSON.stringify(this.readInstancedMatrices(runtime.darkCaps, runtime.darkCaps.count)) === JSON.stringify(snapshot.darkCapMatrices) : snapshot.darkCapMatrices.length === 0,
+      lightCapMatricesExact: runtime ? JSON.stringify(this.readInstancedMatrices(runtime.lightCaps, runtime.lightCaps.count)) === JSON.stringify(snapshot.lightCapMatrices) : snapshot.lightCapMatrices.length === 0,
+      particleMatricesExact: runtime ? JSON.stringify(this.readInstancedMatrices(runtime.particles, runtime.particles.count)) === JSON.stringify(snapshot.particleMatrices) : snapshot.particleMatrices.length === 0,
+      seedExact: this.kittyNaturalMotion.sessionSeed === snapshot.sessionSeed,
+    };
+    this.kittyScanSnapshot = null;
+    this.syncKittyRenderVisibility();
+  }
+
   setQr(qr: CanonicalQr): void {
+    if (this.theme.id === 'kitty' && this.requestedMode === 'scan') this.kittyScanSnapshot = null;
+    const previousGridSize = this.qr.size;
+    if (this.theme.id === 'kitty' && previousGridSize !== qr.size) {
+      reprojectKittyNaturalMotionForGrid(this.kittyNaturalMotion, previousGridSize, qr.size);
+      if (this.kittyDiagnosticMotion) {
+        reprojectKittyNaturalMotionForGrid(this.kittyDiagnosticMotion, previousGridSize, qr.size);
+      }
+    }
     this.qr = qr;
     this.configureBase();
     this.configureHero(this.theme.id);
+    if (this.theme.id === 'kitty' && this.requestedMode === 'scan') this.captureKittyScanSnapshot();
+    this.syncKittyRenderVisibility();
     this.refreshDefaultCamera(!this.manualCameraAdjusted && this.requestedMode === 'scene' && this.progress <= 0.001);
     if (this.requestedMode === 'scan') this.applyCameraTransition();
   }
 
-  setTheme(themeId: ThemeId): void {
+  setTheme(themeId: StudioThemeId): void {
     if (themeId === this.theme.id) return;
+    if (themeId !== 'kitty') this.kittyScanSnapshot = null;
     this.theme = THEMES[themeId];
     this.applyTheme();
+    if (themeId === 'kitty' && this.requestedMode === 'scan') this.captureKittyScanSnapshot();
+    this.syncKittyRenderVisibility();
   }
 
   setScanMode(scan: boolean): void {
+    if (scan) this.captureKittyScanSnapshot();
     this.requestedMode = scan ? 'scan' : 'scene';
     this.targetProgress = scan ? 1 : 0;
     if (scan && this.progress <= 0.001) this.savedCamera = this.readCameraState();
     this.controls.enabled = false;
+    this.syncKittyRenderVisibility();
     this.resize();
+    const runtime = this.runtimes.get(this.theme.id);
+    if (runtime) this.updateHeroRuntime(runtime);
+    this.render();
   }
 
-  setInspectionView(view: 'front' | 'three-quarter' | 'side' | 'back' | 'top' | 'top-oblique'): void {
+  setInspectionView(view: 'front' | 'three-quarter' | 'three-quarter-rear' | 'side' | 'left-side' | 'right-side' | 'back' | 'low' | 'top' | 'top-oblique'): void {
     this.manualCameraAdjusted = true;
-    const responsiveScale = heroScaleForGrid(this.qr.size);
+    this.inspectionAngleDegrees = null;
+    const responsiveScale = this.responsiveHeroScale();
     const distance = 46 * responsiveScale;
     const treeInspection = ['sakura', 'summer', 'maple', 'ginkgo', 'snow'].includes(this.theme.id);
-    const targetY = (treeInspection ? 12 : this.theme.id === 'ocean' ? 1.25 : this.theme.id === 'sunset' ? 5.1 : 5) * responsiveScale;
-    const horizontalViewY = (treeInspection ? 12 : 9) * responsiveScale;
-    const positions: Record<'front' | 'three-quarter' | 'side' | 'back' | 'top' | 'top-oblique', THREE.Vector3> = {
+    const targetY = (
+      treeInspection ? 12
+        : this.theme.id === 'ocean' ? 1.25
+          : this.theme.id === 'sunset' ? 5.1
+            : this.theme.id === 'wanderer' ? 13
+              : this.theme.id === 'kitty' ? 12
+                : 5
+    ) * responsiveScale;
+    const horizontalViewY = (
+      treeInspection ? 12
+        : this.theme.id === 'wanderer' ? 13
+          : this.theme.id === 'kitty' ? 12
+            : 9
+    ) * responsiveScale;
+    const positions: Record<'front' | 'three-quarter' | 'three-quarter-rear' | 'side' | 'left-side' | 'right-side' | 'back' | 'low' | 'top' | 'top-oblique', THREE.Vector3> = {
       front: new THREE.Vector3(0, horizontalViewY, distance),
       'three-quarter': new THREE.Vector3(32, 18, 32).multiplyScalar(responsiveScale),
+      'three-quarter-rear': new THREE.Vector3(-32, 18, -32).multiplyScalar(responsiveScale),
       side: new THREE.Vector3(distance, horizontalViewY, 0),
+      'right-side': new THREE.Vector3(distance, horizontalViewY, 0),
+      'left-side': new THREE.Vector3(-distance, horizontalViewY, 0),
       back: new THREE.Vector3(0, horizontalViewY, -distance),
+      low: new THREE.Vector3(32, 6.2, 36).multiplyScalar(responsiveScale),
       top: new THREE.Vector3(0, targetY + distance, 0.001),
       'top-oblique': new THREE.Vector3(24, 38, 24).multiplyScalar(responsiveScale),
     };
@@ -1293,6 +1586,44 @@ export class VoxelGarden {
     this.camera.zoom = this.sceneZoom() * inspectionScale;
     this.camera.updateProjectionMatrix();
     this.controls.update();
+    this.restoreKittyScanSnapshotIfReady();
+    this.syncKittyRenderVisibility();
+  }
+
+  setInspectionOrbitAngle(angleDegrees: number): void {
+    if (!Number.isFinite(angleDegrees)) throw new Error('INSPECTION_ANGLE_MUST_BE_FINITE');
+    const normalized = ((angleDegrees % 360) + 360) % 360;
+    this.manualCameraAdjusted = false;
+    this.refreshDefaultCamera(false);
+    const base = this.defaultCamera;
+    const offset = base.position.clone().sub(base.target)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(normalized));
+    const position = base.target.clone().add(offset);
+    const quaternion = new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().lookAt(position, base.target, base.up),
+    );
+    this.progress = 0;
+    this.targetProgress = 0;
+    this.requestedMode = 'scene';
+    this.controls.enabled = true;
+    this.manualCameraAdjusted = true;
+    this.inspectionAngleDegrees = normalized;
+    this.writeCameraState({
+      position,
+      quaternion,
+      up: base.up.clone(),
+      target: base.target.clone(),
+      zoom: base.zoom,
+    });
+    this.restoreKittyScanSnapshotIfReady();
+    this.syncKittyRenderVisibility();
+    this.render();
+  }
+
+  private heroAnimationTime(timeOverride?: number): number {
+    if (timeOverride !== undefined) return timeOverride;
+    if (this.diagnosticAnimationTime !== null) return this.diagnosticAnimationTime;
+    return this.theme.id === 'kitty' ? this.kittyNaturalMotion.elapsedSeconds : this.elapsed;
   }
 
   setStructureEvidenceMode(mode: 'normal' | 'color-structure' | 'grayscale' | 'leafless'): void {
@@ -1317,6 +1648,7 @@ export class VoxelGarden {
 
   resetView(): void {
     this.manualCameraAdjusted = false;
+    this.inspectionAngleDegrees = null;
     this.refreshDefaultCamera(false);
     this.writeCameraState(this.defaultCamera);
     this.controls.saveState();
@@ -1335,19 +1667,21 @@ export class VoxelGarden {
 
   getTreeMotionSample(): unknown {
     const runtime = this.runtimes.get(this.theme.id);
-    const scale = runtime?.scaleCurrent ?? heroScaleForGrid(this.qr.size);
+    const scale = runtime?.scaleCurrent ?? this.responsiveHeroScale();
     const motionScale = THREE.MathUtils.lerp(1, SCAN_MOTION_DAMPING, smoother(this.progress));
+    const kittyPose = this.theme.id === 'kitty' ? this.kittyPoseAt() : undefined;
     return {
       theme: this.theme.id,
-      animationTime: this.elapsed,
+      animationTime: this.heroAnimationTime(),
       canonicalUpAxis: 'world-y',
       groupScale: scale,
       bodies: (runtime?.bodies ?? []).map((rawState, index) => {
         const state = rawState as V8BodyState;
-        const evaluated = evaluateBody(state, this.theme.id, this.elapsed, motionScale);
+        const evaluated = evaluateBody(state, this.theme.id, this.heroAnimationTime(), motionScale, kittyPose);
         return {
           id: `body-${index}`,
           semantic: state.semantic,
+          part: state.part,
           motionLayer: state.motionLayer,
           motionGroup: state.motionGroup,
           lineageId: state.lineageId,
@@ -1358,6 +1692,9 @@ export class VoxelGarden {
           cellEdgeWorld: state.cellEdge * scale,
           restWorld: [state.x * scale, state.baseY * scale, state.z * scale],
           world: [evaluated.x * scale, evaluated.y * scale, evaluated.z * scale],
+          sizeWorld: [evaluated.scaleX * scale, evaluated.scaleY * scale, evaluated.scaleZ * scale],
+          rotation: [evaluated.rotationX, evaluated.rotationY, evaluated.rotationZ],
+          bottomWorld: (evaluated.y - evaluated.scaleY * 0.5) * scale,
           visible: evaluated.visible,
         };
       }),
@@ -1366,24 +1703,252 @@ export class VoxelGarden {
 
   getParticleMotionSample(): unknown {
     const runtime = this.runtimes.get(this.theme.id);
-    const scale = runtime?.scaleCurrent ?? heroScaleForGrid(this.qr.size);
+    const scale = runtime?.scaleCurrent ?? this.responsiveHeroScale();
     const motionScale = THREE.MathUtils.lerp(1, SCAN_MOTION_DAMPING, smoother(this.progress));
     return {
       theme: this.theme.id,
-      animationTime: this.elapsed,
+      animationTime: this.heroAnimationTime(),
       canonicalUpAxis: 'world-y',
       groupScale: scale,
       particles: (runtime?.particleStates ?? []).map((rawState, index) => {
         const state = rawState as V8ParticleState;
-        const evaluated = evaluateParticle(state, this.elapsed, motionScale);
+        const evaluated = evaluateParticle(state, this.heroAnimationTime(), motionScale);
         return {
           id: state.id,
           kind: state.kind,
           cellEdgeWorld: state.cellEdge * scale,
           world: [evaluated.x * scale, evaluated.y * scale, evaluated.z * scale],
+          bottomWorld: (evaluated.y - evaluated.scaleY * 0.5) * scale,
+          boardSurfaceWorld: state.boardSurfaceY * scale,
+          opacity: evaluated.opacity,
           visible: Boolean(runtime?.particles.visible && index < (runtime?.particles.count ?? 0) && evaluated.visible),
         };
       }),
+    };
+  }
+
+  getKittyMotionSample(): unknown {
+    const runtime = this.runtimes.get('kitty');
+    const motionState = this.kittyScanSnapshot?.motionState ?? this.kittyMotionStateAt();
+    const clockSeconds = motionState.elapsedSeconds;
+    const pose = this.kittyScanSnapshot?.pose ?? sampleKittyNaturalPose(motionState, this.qr.size);
+    const diagnostic = kittyNaturalMotionDiagnostic(motionState);
+    const navigation = kittyNavigationGeometry(this.qr.size);
+    const renderedColorPalette: string[] = [];
+    if (runtime?.body.instanceColor) {
+      const renderedColor = new THREE.Color();
+      runtime.bodies.forEach((_, index) => {
+        runtime.body.getColorAt(index, renderedColor);
+        renderedColorPalette.push(`#${renderedColor.getHexString()}`);
+      });
+    }
+    return {
+      theme: this.theme.id,
+      active: this.theme.id === 'kitty',
+      mode: this.requestedMode,
+      clockSeconds,
+      frozen: this.theme.id === 'kitty' && this.kittyScanSnapshot !== null && this.diagnosticAnimationTime === null,
+      scanHorizontalScale: 1,
+      renderVisible: Boolean(runtime?.group.visible),
+      scanHidden: this.theme.id === 'kitty' && this.kittyScanSnapshot !== null && runtime?.group.visible === false,
+      bodyMeshVisible: Boolean(runtime?.body.visible && runtime?.group.visible),
+      darkCapsVisible: Boolean(runtime?.darkCaps.visible && runtime?.group.visible),
+      lightCapsVisible: Boolean(runtime?.lightCaps.visible && runtime?.group.visible),
+      snapshot: this.kittyScanSnapshot ? {
+        ...this.kittyScanSnapshot,
+      } : null,
+      lastRestore: this.kittyLastRestoreEvidence,
+      pose,
+      motionModel: diagnostic.model,
+      sessionSeed: diagnostic.sessionSeed,
+      seedSource: diagnostic.seedSource,
+      productionSessionFreshSeed: diagnostic.seedSource === 'production-crypto',
+      testSeedOverride: diagnostic.seedSource === 'test-override',
+      intent: diagnostic.intent,
+      steering: diagnostic.steering,
+      heatmap: diagnostic.heatmap,
+      recentTargets: diagnostic.recentTargets,
+      targetHistory: diagnostic.targetHistory,
+      rngState: diagnostic.rngState,
+      behavior: {
+        targetShares: diagnostic.targetShares,
+        intentSeconds: diagnostic.intentSeconds,
+        intentDistribution: diagnostic.intentDistribution,
+      },
+      safety: diagnostic.safety,
+      loopPolicy: diagnostic.loopPolicy,
+      navigation: {
+        gridSize: navigation.gridSize,
+        heroScale: navigation.heroScale,
+        boardSideWorld: navigation.boardSideWorld,
+        boardHalfWorld: navigation.boardHalfWorld,
+        footprintRadiusLocal: navigation.footprintRadiusLocal,
+        footprintRadiusWorld: navigation.footprintRadiusWorld,
+        centerLimitWorld: navigation.centerLimitWorld,
+        normalizedSafetyLimit: navigation.normalizedSafetyLimit,
+      },
+      scanRemovesKittyBeforeDecode: true,
+      originalColorPalette: runtime
+        ? [...new Set(runtime.bodies.map((body) => `#${body.color.getHexString()}`))].sort()
+        : [],
+      renderedColorPalette: runtime?.group.visible ? [...new Set(renderedColorPalette)].sort() : [],
+    };
+  }
+
+  measureKittyScanNoCatPixelDiff(options: { includeImages?: boolean } = {}): unknown {
+    const runtime = this.runtimes.get('kitty');
+    if (this.theme.id !== 'kitty' || !runtime) throw new Error('KITTY_SCAN_PIXEL_DIFF_REQUIRES_ACTIVE_KITTY');
+    if (this.requestedMode !== 'scan' || this.progress < 0.999 || !this.kittyScanSnapshot) {
+      throw new Error('KITTY_SCAN_PIXEL_DIFF_REQUIRES_SETTLED_SCAN');
+    }
+    if (runtime.group.visible) throw new Error('KITTY_SCAN_PIXEL_DIFF_KITTY_STILL_VISIBLE');
+
+    const canvas = this.renderer.domElement;
+    const width = canvas.width;
+    const height = canvas.height;
+    const gl = this.renderer.getContext();
+    const readFrame = () => {
+      this.render();
+      gl.finish();
+      const pixels = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      return {
+        pixels,
+        dataUrl: options.includeImages ? canvas.toDataURL('image/png') : undefined,
+      };
+    };
+    const sceneObjectCount = () => {
+      let count = 0;
+      this.scene.traverse(() => { count += 1; });
+      return count;
+    };
+    const resourceIdentity = () => {
+      const identifiers: string[] = [];
+      runtime.group.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        identifiers.push(`object:${mesh.uuid}`, `geometry:${mesh.geometry.uuid}`);
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((material) => identifiers.push(`material:${material.uuid}`));
+      });
+      return identifiers.sort();
+    };
+    const effectivelyVisibleMeshCount = () => {
+      let count = 0;
+      runtime.group.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        let visible = true;
+        for (let current: THREE.Object3D | null = mesh; current; current = current.parent) visible = visible && current.visible;
+        if (visible) count += 1;
+      });
+      return count;
+    };
+    const matricesStable = {
+      body: JSON.stringify(this.readInstancedMatrices(runtime.body, runtime.body.count)) === JSON.stringify(this.kittyScanSnapshot.bodyMatrices),
+      darkCaps: JSON.stringify(this.readInstancedMatrices(runtime.darkCaps, runtime.darkCaps.count)) === JSON.stringify(this.kittyScanSnapshot.darkCapMatrices),
+      lightCaps: JSON.stringify(this.readInstancedMatrices(runtime.lightCaps, runtime.lightCaps.count)) === JSON.stringify(this.kittyScanSnapshot.lightCapMatrices),
+      particles: JSON.stringify(this.readInstancedMatrices(runtime.particles, runtime.particles.count)) === JSON.stringify(this.kittyScanSnapshot.particleMatrices),
+    };
+    const resourcesBefore = resourceIdentity();
+    const objectsBefore = sceneObjectCount();
+    const cameraBefore = JSON.stringify({
+      position: this.camera.position.toArray(), quaternion: this.camera.quaternion.toArray(),
+      zoom: this.camera.zoom, projection: this.camera.projectionMatrix.toArray(),
+    });
+    const attachedHidden = readFrame();
+    const groupIndex = this.heroRoot.children.indexOf(runtime.group);
+    if (groupIndex < 0) throw new Error('KITTY_SCAN_PIXEL_DIFF_GROUP_PARENT_DRIFT');
+    let noCatBaseline: ReturnType<typeof readFrame>;
+    this.heroRoot.remove(runtime.group);
+    try {
+      noCatBaseline = readFrame();
+    } finally {
+      this.heroRoot.add(runtime.group);
+      const appendedIndex = this.heroRoot.children.indexOf(runtime.group);
+      if (appendedIndex !== groupIndex) {
+        this.heroRoot.children.splice(appendedIndex, 1);
+        this.heroRoot.children.splice(groupIndex, 0, runtime.group);
+      }
+      this.render();
+    }
+
+    const activeHalf = this.qr.size * 0.5;
+    const corners = [
+      new THREE.Vector3(-activeHalf, 0.52, -activeHalf),
+      new THREE.Vector3(activeHalf, 0.52, -activeHalf),
+      new THREE.Vector3(-activeHalf, 0.52, activeHalf),
+      new THREE.Vector3(activeHalf, 0.52, activeHalf),
+    ].map((point) => point.project(this.camera));
+    const clampX = (value: number) => Math.max(0, Math.min(width - 1, value));
+    const clampY = (value: number) => Math.max(0, Math.min(height - 1, value));
+    const roi = {
+      minX: clampX(Math.floor((Math.min(...corners.map((point) => point.x)) + 1) * width * 0.5)),
+      maxX: clampX(Math.ceil((Math.max(...corners.map((point) => point.x)) + 1) * width * 0.5)),
+      minY: clampY(Math.floor((Math.min(...corners.map((point) => point.y)) + 1) * height * 0.5)),
+      maxY: clampY(Math.ceil((Math.max(...corners.map((point) => point.y)) + 1) * height * 0.5)),
+    };
+    let fullFrameDifferentPixels = 0;
+    let qrRoiDifferentPixels = 0;
+    let maximumChannelDelta = 0;
+    let absoluteChannelDelta = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4;
+        let pixelDifferent = false;
+        for (let channel = 0; channel < 4; channel += 1) {
+          const delta = Math.abs(attachedHidden.pixels[offset + channel] - noCatBaseline.pixels[offset + channel]);
+          maximumChannelDelta = Math.max(maximumChannelDelta, delta);
+          absoluteChannelDelta += delta;
+          if (delta !== 0) pixelDifferent = true;
+        }
+        if (!pixelDifferent) continue;
+        fullFrameDifferentPixels += 1;
+        if (x >= roi.minX && x <= roi.maxX && y >= roi.minY && y <= roi.maxY) qrRoiDifferentPixels += 1;
+      }
+    }
+    const resourcesAfter = resourceIdentity();
+    const objectsAfter = sceneObjectCount();
+    const cameraAfter = JSON.stringify({
+      position: this.camera.position.toArray(), quaternion: this.camera.quaternion.toArray(),
+      zoom: this.camera.zoom, projection: this.camera.projectionMatrix.toArray(),
+    });
+    return {
+      schemaVersion: 'voxelqr-r5-kitty-scan-no-cat-pixel-diff-v1',
+      payload: this.qr.payload,
+      gridSize: this.qr.size,
+      renderer: 'same-production-webgl-renderer-and-framebuffer',
+      cameraUuid: this.camera.uuid,
+      sceneUuid: this.scene.uuid,
+      width,
+      height,
+      qrRoi: roi,
+      snapshot: this.kittyScanSnapshot,
+      scanAttachedHidden: {
+        groupPresent: runtime.group.parent === this.heroRoot,
+        groupVisible: runtime.group.visible,
+        effectivelyVisibleMeshCount: effectivelyVisibleMeshCount(),
+        matricesStable,
+      },
+      noCatBaseline: { groupPhysicallyDetachedDuringReadback: true },
+      diff: {
+        fullFrameDifferentPixels,
+        qrRoiDifferentPixels,
+        maximumChannelDelta,
+        absoluteChannelDelta,
+        exact: fullFrameDifferentPixels === 0 && qrRoiDifferentPixels === 0 && maximumChannelDelta === 0 && absoluteChannelDelta === 0,
+      },
+      restoration: {
+        groupIndexBefore: groupIndex,
+        groupIndexAfter: this.heroRoot.children.indexOf(runtime.group),
+        sceneObjectCountBefore: objectsBefore,
+        sceneObjectCountAfter: objectsAfter,
+        resourcesExact: JSON.stringify(resourcesBefore) === JSON.stringify(resourcesAfter),
+        cameraExact: cameraBefore === cameraAfter,
+        snapshotClockUnchanged: this.heroAnimationTime() === this.kittyScanSnapshot.clockSeconds,
+      },
+      scanDataUrl: attachedHidden.dataUrl,
+      noCatBaselineDataUrl: noCatBaseline.dataUrl,
     };
   }
 
@@ -1395,31 +1960,29 @@ export class VoxelGarden {
     const heroMax: [number, number] = [-Infinity, -Infinity];
     const qrMin: [number, number] = [Infinity, Infinity];
     const qrMax: [number, number] = [-Infinity, -Infinity];
+    const characterMinWorld = new THREE.Vector3(Infinity, Infinity, Infinity);
+    const characterMaxWorld = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
     const point = new THREE.Vector3();
     const object = new THREE.Object3D();
     const motionScale = THREE.MathUtils.lerp(1, SCAN_MOTION_DAMPING, smoother(this.progress));
-    const groupScale = runtime?.scaleCurrent ?? heroScaleForGrid(this.qr.size);
+    const kittyPose = this.theme.id === 'kitty' ? this.kittyPoseAt() : undefined;
+    const groupScale = runtime?.scaleCurrent ?? this.responsiveHeroScale();
     this.camera.updateMatrixWorld();
     const accumulate = (targetMin: [number, number], targetMax: [number, number], worldPoint: THREE.Vector3) => {
-      worldPoint.project(this.camera);
-      const pixelX = (worldPoint.x + 1) * width * 0.5;
-      const pixelY = (1 - worldPoint.y) * height * 0.5;
+      const projected = worldPoint.clone().project(this.camera);
+      const pixelX = (projected.x + 1) * width * 0.5;
+      const pixelY = (1 - projected.y) * height * 0.5;
       targetMin[0] = Math.min(targetMin[0], pixelX);
       targetMin[1] = Math.min(targetMin[1], pixelY);
       targetMax[0] = Math.max(targetMax[0], pixelX);
       targetMax[1] = Math.max(targetMax[1], pixelY);
     };
-    const isSemanticHero = (state: BodyState) => {
-      if (this.theme.id === 'sunset') return state.semantic === 'sun-core';
-      if (this.theme.id === 'ocean') return state.semantic === 'water';
-      if (this.theme.id === 'wanderer') return state.semantic.startsWith('wanderer-') && state.semantic !== 'wanderer-garden';
-      return state.semantic === 'trunk' || state.semantic === 'branch' || state.semantic === 'canopy';
-    };
+    const isSemanticHero = (state: BodyState) => isHeroAreaSemantic(this.theme.id, state.semantic);
     let semanticVoxelCount = 0;
     for (const rawState of runtime?.bodies ?? []) {
       if (!isSemanticHero(rawState)) continue;
       const state = rawState as V8BodyState;
-      const evaluated = evaluateBody(state, this.theme.id, this.elapsed, motionScale);
+      const evaluated = evaluateBody(state, this.theme.id, this.heroAnimationTime(), motionScale, kittyPose);
       if (!evaluated.visible) continue;
       semanticVoxelCount += 1;
       object.position.set(evaluated.x, evaluated.y, evaluated.z);
@@ -1430,6 +1993,8 @@ export class VoxelGarden {
         for (const y of [-0.5, 0.5]) {
           for (const z of [-0.5, 0.5]) {
             point.set(x, y, z).applyMatrix4(object.matrix).multiplyScalar(groupScale);
+            characterMinWorld.min(point);
+            characterMaxWorld.max(point);
             accumulate(heroMin, heroMax, point);
           }
         }
@@ -1439,8 +2004,8 @@ export class VoxelGarden {
     for (const x of [-qrHalf, qrHalf]) {
       for (const z of [-qrHalf, qrHalf]) accumulate(qrMin, qrMax, point.set(x, 0.4925, z));
     }
+    const metric = (value: number) => Number(value.toFixed(6));
     const dimensions = (min: [number, number], max: [number, number]) => {
-      const metric = (value: number) => Number(value.toFixed(6));
       const size: [number, number] = [metric(max[0] - min[0]), metric(max[1] - min[1])];
       return {
         min: min.map(metric) as [number, number],
@@ -1448,22 +2013,65 @@ export class VoxelGarden {
         size,
       };
     };
+    const dimensions3 = (min: THREE.Vector3, max: THREE.Vector3) => ({
+      min: min.toArray().map(metric) as [number, number, number],
+      max: max.toArray().map(metric) as [number, number, number],
+      size: max.clone().sub(min).toArray().map(metric) as [number, number, number],
+    });
     const heroBoundsPx = dimensions(heroMin, heroMax);
     const qrBoundsPx = dimensions(qrMin, qrMax);
+    const characterBoundsWorld = dimensions3(characterMinWorld, characterMaxWorld);
+    const activeQrBoundsWorld = dimensions3(
+      new THREE.Vector3(-qrHalf, 0.4925, -qrHalf),
+      new THREE.Vector3(qrHalf, 0.4925, qrHalf),
+    );
+    const characterAreaPx = metric(heroBoundsPx.size[0] * heroBoundsPx.size[1]);
+    const activeQrAreaPx = metric(qrBoundsPx.size[0] * qrBoundsPx.size[1]);
+    const characterVisualOccupancy = metric(characterAreaPx / Math.max(activeQrAreaPx, 0.000001));
+    const characterWorldMajorAxis = metric(Math.max(...characterBoundsWorld.size));
     const heroProjectedMajorAxisPx = Math.max(...heroBoundsPx.size);
     const qrProjectedMajorAxisPx = Math.max(...qrBoundsPx.size);
     return {
       source: 'actual-production-frame',
+      measurement: 'screen-space-axis-aligned-bounding-box-area',
+      formula: 'area(screen-space AABB of character) / area(screen-space AABB of active QR board)',
       theme: this.theme.id,
       gridSize: this.qr.size,
       frame: this.animationFrame,
       canvas: { width, height },
+      inspectionAngleDegrees: this.inspectionAngleDegrees,
       semanticVoxelCount,
+      characterBoundsWorld,
+      activeQrBoundsWorld,
+      characterBoundsPx: heroBoundsPx,
       heroBoundsPx,
       qrBoundsPx,
+      characterAreaPx,
+      activeQrAreaPx,
+      characterVisualOccupancy,
+      characterWorldMajorAxis,
       heroProjectedMajorAxisPx,
       qrProjectedMajorAxisPx,
       projectedHeroToQrRatio: Number((heroProjectedMajorAxisPx / Math.max(qrProjectedMajorAxisPx, 0.000001)).toFixed(6)),
+      camera: {
+        projection: 'orthographic',
+        fov: null,
+        position: this.camera.position.toArray().map(metric) as [number, number, number],
+        quaternion: this.camera.quaternion.toArray().map(metric) as [number, number, number, number],
+        up: this.camera.up.toArray().map(metric) as [number, number, number],
+        target: this.controls.target.toArray().map(metric) as [number, number, number],
+        zoom: metric(this.camera.zoom),
+        near: metric(this.camera.near),
+        far: metric(this.camera.far),
+        frustum: {
+          left: metric(this.camera.left),
+          right: metric(this.camera.right),
+          top: metric(this.camera.top),
+          bottom: metric(this.camera.bottom),
+        },
+        viewMatrix: this.camera.matrixWorldInverse.toArray().map(metric),
+        projectionMatrix: this.camera.projectionMatrix.toArray().map(metric),
+      },
     };
   }
 
@@ -1515,14 +2123,36 @@ export class VoxelGarden {
     return targets;
   }
 
-  private populateHeroAreaMask(runtime: HeroRuntime): { semanticVoxelCount: number; excludedSemanticVoxelCount: number } {
+  private populateHeroAreaMask(
+    runtime: HeroRuntime,
+    subjectLinearScaleMultiplier = 1,
+    timeSeconds = this.elapsed,
+  ): {
+    semanticVoxelCount: number;
+    excludedSemanticVoxelCount: number;
+    uniformScaleAnchorWorld: [number, number, number] | null;
+  } {
     this.scene.updateMatrixWorld(true);
     const instance = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const kittyPose = this.theme.id === 'kitty' ? this.kittyPoseAt(timeSeconds) : null;
+    const anchor = kittyPose
+      ? new THREE.Vector3(kittyPose.x, R3_KITTY_FOOT_CONTACT_Y, kittyPose.z).applyMatrix4(runtime.body.matrixWorld)
+      : null;
     let semanticVoxelCount = 0;
     runtime.bodies.forEach((state, index) => {
       if (!isHeroAreaSemantic(this.theme.id, state.semantic)) return;
       runtime.body.getMatrixAt(index, instance);
       instance.premultiply(runtime.body.matrixWorld);
+      if (subjectLinearScaleMultiplier !== 1) {
+        if (!anchor) throw new Error('HERO_AREA_SUBJECT_SCALE_REQUIRES_KITTY_ANCHOR');
+        instance.decompose(position, quaternion, scale);
+        position.sub(anchor).multiplyScalar(subjectLinearScaleMultiplier).add(anchor);
+        scale.multiplyScalar(subjectLinearScaleMultiplier);
+        instance.compose(position, quaternion, scale);
+      }
       this.areaMaskMesh.setMatrixAt(semanticVoxelCount, instance);
       semanticVoxelCount += 1;
     });
@@ -1532,6 +2162,9 @@ export class VoxelGarden {
     return {
       semanticVoxelCount,
       excludedSemanticVoxelCount: runtime.bodies.length - semanticVoxelCount,
+      uniformScaleAnchorWorld: anchor
+        ? anchor.toArray().map((value) => Number(value.toFixed(8))) as [number, number, number]
+        : null,
     };
   }
 
@@ -1539,7 +2172,7 @@ export class VoxelGarden {
     heroTarget: THREE.WebGLRenderTarget,
     qrTarget: THREE.WebGLRenderTarget,
     resolution: number,
-    kind: 'intersection' | 'qr',
+    kind: 'intersection' | 'qr' | 'hero',
   ): string {
     const heroPixels = new Uint8Array(resolution * resolution * 4);
     const qrPixels = new Uint8Array(resolution * resolution * 4);
@@ -1553,7 +2186,13 @@ export class VoxelGarden {
         const source = sourceOffset + x * 4;
         const destination = destinationOffset + x * 4;
           const insideQr = qrPixels[source] > 127;
-          const occupied = (kind === 'qr' ? insideQr : insideQr && heroPixels[source] > 127) ? 255 : 0;
+          const occupied = (
+            kind === 'qr'
+              ? insideQr
+              : kind === 'hero'
+                ? heroPixels[source] > 127
+                : insideQr && heroPixels[source] > 127
+          ) ? 255 : 0;
         rgba[destination] = occupied;
         rgba[destination + 1] = occupied;
         rgba[destination + 2] = occupied;
@@ -1577,6 +2216,7 @@ export class VoxelGarden {
     includeWorstMask?: boolean;
     includeExtremaMasks?: boolean;
     cameraMode?: 'top-down' | 'default';
+    kittySubjectLinearScaleMultiplier?: number;
   } = {}): HeroAreaWindowMetric {
     const runtime = this.runtimes.get(this.theme.id);
     if (!runtime) throw new Error('HERO_AREA_RUNTIME_MISSING');
@@ -1584,10 +2224,16 @@ export class VoxelGarden {
     const durationSeconds = options.durationSeconds ?? HERO_AREA_WINDOW_SECONDS[this.theme.id];
     const sampleHz = options.sampleHz ?? HERO_AREA_SAMPLE_HZ;
     const resolution = options.resolution ?? 1024;
-    const cameraMode = options.cameraMode ?? 'top-down';
+    const r5KittyMask = this.theme.id === 'kitty';
+    const subjectLinearScaleMultiplier = options.kittySubjectLinearScaleMultiplier ?? 1;
+    const cameraMode = r5KittyMask ? 'default' : options.cameraMode ?? 'top-down';
     if (!Number.isFinite(startTimeSeconds) || startTimeSeconds < 0) throw new Error('HERO_AREA_START_TIME_INVALID');
     if (!Number.isFinite(durationSeconds) || durationSeconds < 0) throw new Error('HERO_AREA_DURATION_INVALID');
     if (!Number.isFinite(sampleHz) || sampleHz < HERO_AREA_SAMPLE_HZ) throw new Error('HERO_AREA_SAMPLE_RATE_BELOW_60HZ');
+    if (!Number.isFinite(subjectLinearScaleMultiplier) || subjectLinearScaleMultiplier <= 0 || subjectLinearScaleMultiplier > 4) {
+      throw new Error('HERO_AREA_SUBJECT_SCALE_MULTIPLIER_INVALID');
+    }
+    if (!r5KittyMask && subjectLinearScaleMultiplier !== 1) throw new Error('HERO_AREA_SUBJECT_SCALE_ONLY_SUPPORTED_FOR_KITTY');
     const targets = this.heroAreaTargets(resolution);
     const previousCamera = this.readCameraState();
     const previousCameraLayer = this.camera.layers.mask;
@@ -1601,12 +2247,13 @@ export class VoxelGarden {
     const previousBackground = this.scene.background;
     const previousAutoClear = this.renderer.autoClear;
     const qrPlaneY = 0.52;
-    const qrHalf = this.qr.size * 0.5;
+    const boardSide = r5KittyMask ? this.qr.size + QUIET_ZONE * 2 : this.qr.size;
+    const boardHalf = boardSide * 0.5;
     const projected = [
-      new THREE.Vector3(-qrHalf, qrPlaneY, -qrHalf),
-      new THREE.Vector3(qrHalf, qrPlaneY, -qrHalf),
-      new THREE.Vector3(-qrHalf, qrPlaneY, qrHalf),
-      new THREE.Vector3(qrHalf, qrPlaneY, qrHalf),
+      new THREE.Vector3(-boardHalf, qrPlaneY, -boardHalf),
+      new THREE.Vector3(boardHalf, qrPlaneY, -boardHalf),
+      new THREE.Vector3(-boardHalf, qrPlaneY, boardHalf),
+      new THREE.Vector3(boardHalf, qrPlaneY, boardHalf),
     ];
     const ratioTrace: number[] = [];
     let minFrame: HeroAreaFrameMetric | null = null;
@@ -1616,8 +2263,8 @@ export class VoxelGarden {
 
     const renderFrame = (timeSeconds: number, includeMask = false): HeroAreaFrameMetric => {
       this.elapsed = timeSeconds;
-      this.updateHeroRuntime(runtime);
-      const counts = this.populateHeroAreaMask(runtime);
+      this.updateHeroRuntime(runtime, false, timeSeconds);
+      const counts = this.populateHeroAreaMask(runtime, subjectLinearScaleMultiplier, timeSeconds);
       this.areaMaskMesh.visible = true;
       this.areaQrMaskMesh.visible = false;
       this.areaReductionMesh.visible = false;
@@ -1635,6 +2282,7 @@ export class VoxelGarden {
         this.areaReductionMesh.material = this.areaReductionMaterial;
         let input: THREE.WebGLRenderTarget = targets.heroMask;
         let inputSize = resolution;
+        this.areaReductionMaterial.uniforms.clipSubjectToBoard.value = r5KittyMask ? 0 : 1;
         for (const [reductionIndex, output] of targets.reductions.entries()) {
           this.areaReductionMaterial.uniforms.inputTexture.value = input.texture;
           this.areaReductionMaterial.uniforms.qrTexture.value = targets.qrMask.texture;
@@ -1666,15 +2314,19 @@ export class VoxelGarden {
         this.renderer.readRenderTargetPixels(targets.heroMask, 0, 0, resolution, resolution, heroPixels);
         this.renderer.readRenderTargetPixels(targets.qrMask, 0, 0, resolution, resolution, qrMaskPixels);
         for (let index = 0; index < heroPixels.length; index += 4) {
-          if (qrMaskPixels[index] > 127) {
-            qrPixels += 1;
-            if (heroPixels[index] > 127) heroIntersectionPixels += 1;
-          }
+          const insideBoard = qrMaskPixels[index] > 127;
+          if (insideBoard) qrPixels += 1;
+          if (heroPixels[index] > 127 && (r5KittyMask || insideBoard)) heroIntersectionPixels += 1;
         }
       }
       const metric: HeroAreaFrameMetric = {
         source: 'production-scene-semantic-id-pass',
-        maskSource: 'dual-production-geometry-masks-semantic-subject-and-active-qr-plane',
+        maskSource: r5KittyMask
+          ? 'deterministic-object-id-silhouette-and-full-physical-board-top-mask'
+          : 'dual-production-geometry-masks-semantic-subject-and-active-qr-plane',
+        formula: r5KittyMask
+          ? 'full projected character silhouette pixels / full physical board top mask pixels'
+          : 'subject pixels intersecting active QR mask / active QR mask pixels',
         sceneUuid: this.scene.uuid,
         cameraUuid: this.camera.uuid,
         theme: this.theme.id,
@@ -1684,16 +2336,72 @@ export class VoxelGarden {
         resolution,
         qrPixels,
         heroIntersectionPixels,
+        boardPixels: qrPixels,
+        silhouettePixels: heroIntersectionPixels,
         ratio: Number((heroIntersectionPixels / qrPixels).toFixed(8)),
         semanticVoxelCount: counts.semanticVoxelCount,
         excludedSemanticVoxelCount: counts.excludedSemanticVoxelCount,
-        cameraMode: cameraMode === 'top-down' ? 'production-top-down-scan-camera' : 'production-default-opening-camera',
-        viewportExtraction: 'active-qr-projected-mask-intersection',
+        subjectLinearScaleMultiplier,
+        uniformScaleAnchorWorld: counts.uniformScaleAnchorWorld,
+        cameraMode: r5KittyMask
+          ? 'production-r4-fixed-three-quarter-explore-camera'
+          : cameraMode === 'top-down'
+            ? 'production-top-down-scan-camera'
+            : 'production-default-opening-camera',
+        viewportExtraction: r5KittyMask
+          ? 'fixed-explore-full-frame-no-aabb'
+          : 'active-qr-projected-mask-intersection',
         antiAliasIndependent: true,
         reduction: reductionMode,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio,
+          rendererPixelRatio: this.renderer.getPixelRatio(),
+          drawingBufferWidth: this.renderer.domElement.width,
+          drawingBufferHeight: this.renderer.domElement.height,
+        },
+        camera: {
+          projection: 'orthographic',
+          fov: null,
+          position: this.camera.position.toArray().map((value) => Number(value.toFixed(8))) as [number, number, number],
+          quaternion: this.camera.quaternion.toArray().map((value) => Number(value.toFixed(8))) as [number, number, number, number],
+          up: this.camera.up.toArray().map((value) => Number(value.toFixed(8))) as [number, number, number],
+          target: this.controls.target.toArray().map((value) => Number(value.toFixed(8))) as [number, number, number],
+          zoom: Number(this.camera.zoom.toFixed(8)),
+          near: Number(this.camera.near.toFixed(8)),
+          far: Number(this.camera.far.toFixed(8)),
+          frustum: {
+            left: Number(this.camera.left.toFixed(8)),
+            right: Number(this.camera.right.toFixed(8)),
+            top: Number(this.camera.top.toFixed(8)),
+            bottom: Number(this.camera.bottom.toFixed(8)),
+          },
+          viewMatrix: this.camera.matrixWorldInverse.toArray().map((value) => Number(value.toFixed(8))),
+          projectionMatrix: this.camera.projectionMatrix.toArray().map((value) => Number(value.toFixed(8))),
+        },
+        boardMask: {
+          source: 'production-physical-board-top-plane',
+          includesQuietZone: r5KittyMask,
+          quietZoneModules: r5KittyMask ? QUIET_ZONE : 0,
+          sideWorld: boardSide,
+          position: this.areaQrMaskMesh.position.toArray().map((value) => Number(value.toFixed(8))) as [number, number, number],
+          rotation: [
+            Number(this.areaQrMaskMesh.rotation.x.toFixed(8)),
+            Number(this.areaQrMaskMesh.rotation.y.toFixed(8)),
+            Number(this.areaQrMaskMesh.rotation.z.toFixed(8)),
+          ],
+          scale: this.areaQrMaskMesh.scale.toArray().map((value) => Number(value.toFixed(8))) as [number, number, number],
+          matrixWorld: this.areaQrMaskMesh.matrixWorld.toArray().map((value) => Number(value.toFixed(8))),
+        },
       };
       if (includeMask) {
-        metric.maskDataUrl = this.readHeroAreaMaskDataUrl(targets.heroMask, targets.qrMask, resolution, 'intersection');
+        metric.maskDataUrl = this.readHeroAreaMaskDataUrl(
+          targets.heroMask,
+          targets.qrMask,
+          resolution,
+          r5KittyMask ? 'hero' : 'intersection',
+        );
         metric.qrMaskDataUrl = this.readHeroAreaMaskDataUrl(targets.heroMask, targets.qrMask, resolution, 'qr');
       }
       return metric;
@@ -1705,30 +2413,33 @@ export class VoxelGarden {
       this.renderer.autoClear = false;
       this.renderer.setClearColor('#000000', 1);
       this.camera.layers.set(HERO_AREA_DIAGNOSTIC_LAYER);
-      if (cameraMode === 'top-down') this.applyScanCamera();
+      if (r5KittyMask) this.writeCameraState(this.createFixedKittyExploreMaskCameraState());
+      else if (cameraMode === 'top-down') this.applyScanCamera();
       else this.writeCameraState(this.defaultCamera);
       this.camera.updateMatrixWorld(true);
-      projected.forEach((point) => point.project(this.camera));
-      const minX = Math.min(...projected.map((point) => point.x));
-      const maxX = Math.max(...projected.map((point) => point.x));
-      const minY = Math.min(...projected.map((point) => point.y));
-      const maxY = Math.max(...projected.map((point) => point.y));
-      const spanX = Math.max(0.000001, maxX - minX);
-      const spanY = Math.max(0.000001, maxY - minY);
-      const cropProjection = new THREE.Matrix4().set(
-        2 / spanX, 0, 0, -(maxX + minX) / spanX,
-        0, 2 / spanY, 0, -(maxY + minY) / spanY,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-      );
-      this.camera.projectionMatrix.premultiply(cropProjection);
-      this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+      if (!r5KittyMask) {
+        projected.forEach((point) => point.project(this.camera));
+        const minX = Math.min(...projected.map((point) => point.x));
+        const maxX = Math.max(...projected.map((point) => point.x));
+        const minY = Math.min(...projected.map((point) => point.y));
+        const maxY = Math.max(...projected.map((point) => point.y));
+        const spanX = Math.max(0.000001, maxX - minX);
+        const spanY = Math.max(0.000001, maxY - minY);
+        const cropProjection = new THREE.Matrix4().set(
+          2 / spanX, 0, 0, -(maxX + minX) / spanX,
+          0, 2 / spanY, 0, -(maxY + minY) / spanY,
+          0, 0, 1, 0,
+          0, 0, 0, 1,
+        );
+        this.camera.projectionMatrix.premultiply(cropProjection);
+        this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+      }
 
       this.areaMaskMesh.visible = false;
       this.areaReductionMesh.visible = false;
       this.areaQrMaskMesh.visible = true;
       this.areaQrMaskMesh.position.set(0, qrPlaneY, 0);
-      this.areaQrMaskMesh.scale.set(this.qr.size, this.qr.size, 1);
+      this.areaQrMaskMesh.scale.set(boardSide, boardSide, 1);
       this.areaQrMaskMesh.updateMatrixWorld(true);
       this.renderer.setRenderTarget(targets.qrMask);
       this.renderer.clear(true, false, false);
@@ -1746,12 +2457,15 @@ export class VoxelGarden {
       if (!minFrame || !maxFrame) throw new Error('HERO_AREA_NO_FRAMES_RENDERED');
       let measuredMinFrame = minFrame as HeroAreaFrameMetric;
       let measuredMaxFrame = maxFrame as HeroAreaFrameMetric;
-      if (options.includeWorstMask || options.includeExtremaMasks) {
-        measuredMinFrame = renderFrame(measuredMinFrame.timeSeconds, true);
-      }
+      const band = HERO_AREA_BANDS[this.theme.id];
+      let measuredWorstFrame = Math.abs(measuredMinFrame.ratio - band.target) >= Math.abs(measuredMaxFrame.ratio - band.target)
+        ? measuredMinFrame
+        : measuredMaxFrame;
       if (options.includeExtremaMasks) {
+        measuredMinFrame = renderFrame(measuredMinFrame.timeSeconds, true);
         measuredMaxFrame = renderFrame(measuredMaxFrame.timeSeconds, true);
       }
+      if (options.includeWorstMask) measuredWorstFrame = renderFrame(measuredWorstFrame.timeSeconds, true);
       const sortedRatios = [...ratioTrace].sort((first, second) => first - second);
       const middle = Math.floor(sortedRatios.length * 0.5);
       const medianRatio = sortedRatios.length % 2
@@ -1768,16 +2482,18 @@ export class VoxelGarden {
         fixedTimestepSeconds: 1 / sampleHz,
         renderedFrameCount,
         resolution,
-        requiredMin: HERO_AREA_REQUIRED_MIN,
-        requiredMax: HERO_AREA_REQUIRED_MAX,
-        authoringTarget: HERO_AREA_AUTHORING_TARGET,
+        requiredMin: band.min,
+        requiredMax: band.max,
+        authoringTarget: band.target,
+        subjectLinearScaleMultiplier,
         ratioTrace,
         minRatio: measuredMinFrame.ratio,
         maxRatio: measuredMaxFrame.ratio,
         medianRatio: Number(medianRatio.toFixed(8)),
+        bandPass: measuredMinFrame.ratio >= band.min && measuredMaxFrame.ratio <= band.max,
         minFrame: measuredMinFrame,
         maxFrame: measuredMaxFrame,
-        worstFrame: measuredMinFrame,
+        worstFrame: measuredWorstFrame,
       };
     } finally {
       this.areaMaskMesh.count = 0;
@@ -1802,10 +2518,34 @@ export class VoxelGarden {
 
   setDiagnosticAnimationTime(timeSeconds: number | null): void {
     if (timeSeconds !== null && (!Number.isFinite(timeSeconds) || timeSeconds < 0)) throw new Error('DIAGNOSTIC_TIME_INVALID');
-    this.diagnosticAnimationTime = timeSeconds;
-    if (timeSeconds !== null) this.elapsed = timeSeconds;
+    if (timeSeconds !== null) {
+      this.diagnosticAnimationTime = timeSeconds;
+      this.elapsed = timeSeconds;
+      if (this.theme.id === 'kitty' && this.kittyScanSnapshot === null) {
+        this.kittyMotionStateAt(timeSeconds);
+      }
+    } else {
+      if (this.diagnosticAnimationTime !== null && this.kittyDiagnosticMotion && this.kittyScanSnapshot === null) {
+        this.kittyNaturalMotion = cloneKittyNaturalMotion(this.kittyDiagnosticMotion);
+      }
+      this.diagnosticAnimationTime = null;
+      this.kittyDiagnosticMotion = null;
+    }
     const runtime = this.runtimes.get(this.theme.id);
     if (runtime) this.updateHeroRuntime(runtime);
+    this.render();
+  }
+
+  setKittyTestSeed(sessionSeed: string | null): void {
+    if (this.kittyScanSnapshot) throw new Error('R6_KITTY_TEST_SEED_OVERRIDE_REQUIRES_EXPLORE');
+    this.kittyNaturalMotion = sessionSeed === null
+      ? createKittyNaturalMotion(createProductionKittySessionSeed(), 'production-crypto')
+      : createKittyNaturalMotion(sessionSeed, 'test-override');
+    this.kittyDiagnosticMotion = null;
+    this.diagnosticAnimationTime = null;
+    this.kittyLastRestoreEvidence = null;
+    const runtime = this.runtimes.get('kitty');
+    if (runtime) this.updateHeroRuntime(runtime, true);
     this.render();
   }
 
@@ -1817,12 +2557,12 @@ export class VoxelGarden {
     const sunVolume = runtime ? this.sunVolumeMetric(runtime) : null;
     const oceanMotion = runtime ? this.oceanMotionMetric(runtime) : null;
     const v8 = runtime ? collectV8Metrics(this.theme.id, runtime.bodies as V8BodyState[], runtime.particleStates as V8ParticleState[]) : collectV8Metrics(this.theme.id, [], []);
-    const targetScale = heroScaleForGrid(this.qr.size);
+    const targetScale = this.responsiveHeroScale();
     const axes: [number, number, number] = runtime
       ? [runtime.group.scale.x, runtime.group.scale.y, runtime.group.scale.z]
       : [targetScale, targetScale, targetScale];
     const currentScale = runtime?.scaleCurrent ?? targetScale;
-    const referenceMajorAxis = HERO_REFERENCE_MAJOR_AXIS[this.theme.id];
+    const referenceMajorAxis = HERO_REFERENCE_MAJOR_AXIS_V11[this.theme.id];
     const semanticMajorAxisWorld = referenceMajorAxis * currentScale;
     const heroToQrRatio = semanticMajorAxisWorld / this.qr.size;
     const referenceHeroToQrRatio = referenceMajorAxis / HERO_REFERENCE_GRID_SIZE;
@@ -1859,7 +2599,7 @@ export class VoxelGarden {
       cameraUuid: this.camera.uuid,
       canvasId: this.renderer.domElement.id,
       materialSignature: [this.theme.scanDark, this.theme.mid, this.theme.bright, this.theme.highlight, this.theme.ground].join('|'),
-      animationTime: this.elapsed,
+      animationTime: this.heroAnimationTime(),
       animationFrame: this.animationFrame,
       camera: {
         position: this.camera.position.toArray(),
@@ -1890,6 +2630,8 @@ export class VoxelGarden {
         maxLongTaskMs: this.longTasks.length ? Math.max(...this.longTasks) : 0,
         fidelityLevel: this.fidelityLevel,
         fidelityReason: this.fidelityReason,
+        slowFrameBudget: this.slowFrameBudget,
+        recoveryFrameBudget: this.recoveryFrameBudget,
         heroResolutionPreserved: true,
         qrResolutionPreserved: true,
         activeParticleCount: runtime?.particles.count ?? 0,
@@ -1977,7 +2719,7 @@ export class VoxelGarden {
   }
 
   private createDefaultCameraState(): CameraState {
-    const scale = heroScaleForGrid(this.qr.size);
+    const scale = this.responsiveHeroScale();
     const runtime = this.runtimes.get(this.theme.id);
     const quietHalf = (this.qr.size + QUIET_ZONE * 2) * 0.5;
     const min = new THREE.Vector3(-quietHalf, -0.55, -quietHalf);
@@ -1985,15 +2727,24 @@ export class VoxelGarden {
     const motionPadding = (this.theme.id === 'wanderer' ? 1.15 : this.theme.id === 'ocean' ? 0.75 : 0.65) * scale;
     if (runtime) {
       for (const state of runtime.bodies) {
-        const halfX = state.scaleX * scale * 0.5 + motionPadding;
-        const halfY = state.scaleY * scale * 0.5 + motionPadding;
-        const halfZ = state.scaleZ * scale * 0.5 + motionPadding;
-        min.x = Math.min(min.x, state.x * scale - halfX);
-        min.y = Math.min(min.y, state.baseY * scale - halfY);
-        min.z = Math.min(min.z, state.z * scale - halfZ);
-        max.x = Math.max(max.x, state.x * scale + halfX);
-        max.y = Math.max(max.y, state.baseY * scale + halfY);
-        max.z = Math.max(max.z, state.z * scale + halfZ);
+        // Kitty's Explore camera is an immutable R4 acceptance baseline.
+        // Reconstruct only the R4 fitting bounds here; product geometry and
+        // object-ID masks remain the true R5 size.
+        const baselineMultiplier = this.theme.id === 'kitty' ? 1 / R5_KITTY_LINEAR_SCALE_FROM_R4 : 1;
+        const baselineX = state.x * baselineMultiplier;
+        const baselineY = this.theme.id === 'kitty'
+          ? R3_KITTY_FOOT_CONTACT_Y + (state.baseY - R3_KITTY_FOOT_CONTACT_Y) * baselineMultiplier
+          : state.baseY;
+        const baselineZ = state.z * baselineMultiplier;
+        const halfX = state.scaleX * baselineMultiplier * scale * 0.5 + motionPadding;
+        const halfY = state.scaleY * baselineMultiplier * scale * 0.5 + motionPadding;
+        const halfZ = state.scaleZ * baselineMultiplier * scale * 0.5 + motionPadding;
+        min.x = Math.min(min.x, baselineX * scale - halfX);
+        min.y = Math.min(min.y, baselineY * scale - halfY);
+        min.z = Math.min(min.z, baselineZ * scale - halfZ);
+        max.x = Math.max(max.x, baselineX * scale + halfX);
+        max.y = Math.max(max.y, baselineY * scale + halfY);
+        max.z = Math.max(max.z, baselineZ * scale + halfZ);
       }
     }
     const target = min.clone().add(max).multiplyScalar(0.5);
@@ -2052,6 +2803,10 @@ export class VoxelGarden {
     return FRUSTUM_HEIGHT / (this.qr.size + 11) * 0.89;
   }
 
+  private responsiveHeroScale(themeId: StudioThemeId = this.theme.id): number {
+    return themeId === 'kitty' ? r5KittyScaleForGrid(this.qr.size) : heroScaleForGrid(this.qr.size);
+  }
+
   private computeScanZoom(): number {
     const parent = this.renderer.domElement.parentElement;
     const aspect = parent ? Math.max(0.2, parent.clientWidth / Math.max(1, parent.clientHeight)) : 1;
@@ -2102,6 +2857,23 @@ export class VoxelGarden {
     else this.camera.updateProjectionMatrix();
   }
 
+  private createFixedKittyExploreMaskCameraState(): CameraState {
+    const responsiveScale = this.responsiveHeroScale('kitty');
+    const position = new THREE.Vector3(32, 18, 32).multiplyScalar(responsiveScale);
+    const target = new THREE.Vector3(0, 12, 0).multiplyScalar(responsiveScale);
+    const up = new THREE.Vector3(0, 1, 0);
+    const quaternion = new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().lookAt(position, target, up),
+    );
+    return {
+      position,
+      quaternion,
+      up,
+      target,
+      zoom: this.sceneZoom() * 1.65,
+    };
+  }
+
   private observeLongTasks(): void {
     try {
       this.longTaskObserver = new PerformanceObserver((list) => {
@@ -2149,8 +2921,14 @@ export class VoxelGarden {
       if (this.frameTimes.length > 900) this.frameTimes.shift();
     }
     const delta = Math.min(0.05, this.clock.getDelta());
-    if (this.diagnosticAnimationTime === null) this.elapsed += delta;
-    else this.elapsed = this.diagnosticAnimationTime;
+    if (this.diagnosticAnimationTime === null) {
+      this.elapsed += delta;
+      if (this.requestedMode === 'scene' && this.kittyScanSnapshot === null) {
+        advanceKittyNaturalMotion(this.kittyNaturalMotion, delta);
+      }
+    } else {
+      this.elapsed = this.diagnosticAnimationTime;
+    }
     this.animationFrame += 1;
 
     if (Math.abs(this.progress - this.targetProgress) > 0.0005) {
@@ -2166,10 +2944,12 @@ export class VoxelGarden {
         this.controls.enabled = true;
       }
     }
+    this.restoreKittyScanSnapshotIfReady();
+    this.syncKittyRenderVisibility();
 
     if (this.controls.enabled) this.controls.update();
     const runtime = this.runtimes.get(this.theme.id);
-    if (runtime) {
+    if (runtime && !(this.theme.id === 'kitty' && this.kittyScanSnapshot !== null)) {
       this.updateHeroScale(runtime);
       this.updateHeroRuntime(runtime);
     }

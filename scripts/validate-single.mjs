@@ -1,8 +1,9 @@
 import { chromium } from '@playwright/test';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  acceptanceRoot, assert, canvasFrame, chromePath, decodePng, ensureEvidenceDirs,
+  acceptanceRoot, assert, buildRoot, canvasFrame, chromePath, decodePng, ensureEvidenceDirs,
   setPayloadAndWait, setScanAndWait, themes, waitForGarden, writeEvidence,
 } from './validation-helpers.mjs';
 
@@ -16,7 +17,11 @@ page.on('request', (request) => {
   if (protocol === 'http:' || protocol === 'https:') networkRequests.push(request.url());
 });
 page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
-const fileUrl = pathToFileURL(path.join(acceptanceRoot, 'final', 'VoxelQR-Studio-Web.html')).href;
+const acceptanceHtml = path.join(acceptanceRoot, 'VoxelQR-Studio-Web.html');
+const buildHtml = path.join(buildRoot, 'single', 'index.html');
+const singlePath = existsSync(acceptanceHtml) ? acceptanceHtml : buildHtml;
+const singleSource = singlePath === acceptanceHtml ? 'acceptance' : 'r6-build';
+const fileUrl = pathToFileURL(singlePath).href;
 await page.goto(fileUrl, { waitUntil: 'load' });
 await waitForGarden(page);
 assert((await page.title()) === 'VoxelQR Studio', 'WEB_SINGLE_HTML: wrong Studio title');
@@ -46,6 +51,10 @@ const result = {
   WEB_SINGLE_HTML_BRAND_GATE: 'PASS_EXACT_VOXELQR_STUDIO',
   WEB_OFFLINE_FILE_GATE: 'PASS_0_REQUESTS',
   WEB_SINGLE_HTML_QR_RUNTIME_GATE: `PASS_${themes.length}_OF_${themes.length}`,
+  WEB_SINGLE_HTML_SOURCE_GATE: singleSource === 'acceptance'
+    ? 'PASS_DIRECT_ACCEPTANCE_HTML'
+    : 'PASS_PROJECT_CONTAINED_R6_BUILD_HTML_PRE_ACCEPTANCE',
+  singleSource,
   WEB_SINGLE_HTML_COLD_OPEN_PATH: fileUrl,
   themeMetrics,
 };

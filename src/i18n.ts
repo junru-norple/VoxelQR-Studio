@@ -10,7 +10,7 @@ const messages = {
     themes: '選擇庭園', language: '語言', offline: '完全離線', empty: '輸入內容後，庭園會立即生長。', needsInput: '等待內容',
     tooLong: '內容超過 600 個字元，請縮短後再試。', syncing: '正在生長', synchronized: '已即時更新', inputHelp: '輸入、貼上或刪除都會立即更新，不需要按下生成。',
     scanTip: '同一座彩色庭園，正平滑移向俯視', sceneTip: '左鍵自由旋轉 · 右鍵平移 · 滾輪縮放',
-    sakura: '櫻花', summer: '夏樹', maple: '楓葉', ginkgo: '銀杏', snow: '雪樹', sunset: '夕陽', ocean: '海浪', wanderer: '像素旅兔',
+    sakura: '櫻花', summer: '夏樹', maple: '楓葉', ginkgo: '銀杏', snow: '雪樹', sunset: '夕陽', ocean: '海浪', wanderer: '像素旅兔', kitty: '體素小貓',
     downloadedQr: '俯視圖片已匯出', downloadedScene: '場景圖片已匯出', close: '關閉',
   },
   en: {
@@ -22,7 +22,7 @@ const messages = {
     themes: 'Choose a scene', language: 'Language', offline: 'Fully offline', empty: 'Enter content and the scene will appear immediately.', needsInput: 'Waiting for content',
     tooLong: 'This exceeds 600 characters. Shorten it and try again.', syncing: 'Growing', synchronized: 'Updated live', inputHelp: 'Typing, pasting, and deleting update immediately—there is no Generate step.',
     scanTip: 'The same colored scene is moving smoothly overhead', sceneTip: 'Left drag rotates · Right drag pans · Wheel zooms',
-    sakura: 'Sakura', summer: 'Summer tree', maple: 'Maple', ginkgo: 'Ginkgo', snow: 'Snow tree', sunset: 'Sunset', ocean: 'Ocean waves', wanderer: 'Pixel Wanderer',
+    sakura: 'Sakura', summer: 'Summer tree', maple: 'Maple', ginkgo: 'Ginkgo', snow: 'Snow tree', sunset: 'Sunset', ocean: 'Ocean waves', wanderer: 'Pixel Wanderer', kitty: 'Voxel Kitty',
     downloadedQr: 'Top-down image exported', downloadedScene: 'Scene image exported', close: 'Close',
   },
 } as const;
