@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { messageKeys, t, type MessageKey } from '../../src/i18n';
 
+const themeNameKeys = [
+  'sakura', 'summer', 'maple', 'ginkgo', 'snow', 'sunset', 'ocean', 'wanderer', 'kitty',
+] as const satisfies readonly MessageKey[];
+
+const themeDescriptionKeys = [
+  'sakuraDescription', 'summerDescription', 'mapleDescription',
+  'ginkgoDescription', 'snowDescription', 'sunsetDescription',
+  'oceanDescription', 'wandererDescription', 'kittyDescription',
+] as const satisfies readonly MessageKey[];
+
 describe('i18n contract', () => {
   it('keeps English and Traditional Chinese keys in parity', () => {
     expect(messageKeys('zh-TW')).toEqual(messageKeys('en'));
@@ -17,6 +27,24 @@ describe('i18n contract', () => {
     expect(t('en', 'themes')).toBe('Choose a scene');
     expect(t('en', 'empty')).toBe('Enter content and the scene will appear immediately.');
     expect(t('en', 'scanTip')).toBe('The same colored scene is moving smoothly overhead');
+  });
+
+  it('localizes both workflow steps and all nine theme descriptions', () => {
+    expect(t('zh-TW', 'contentStep')).toBe('01 · 內容');
+    expect(t('zh-TW', 'styleStep')).toBe('02 · 風格');
+    expect(t('en', 'contentStep')).toBe('01 · CONTENT');
+    expect(t('en', 'styleStep')).toBe('02 · STYLE');
+    expect(themeNameKeys.map((key) => t('en', key))).toEqual([
+      'Sakura', 'Summer Grove', 'Maple', 'Ginkgo', 'Snow Pine', 'Sunset', 'Ocean Waves', 'Pixel Wanderer', 'Voxel Kitty',
+    ]);
+    expect(themeNameKeys.map((key) => t('zh-TW', key))).toEqual([
+      '櫻花', '盛夏綠蔭', '楓葉', '銀杏', '雪松', '日落', '海浪', '像素旅兔', 'Voxel Kitty',
+    ]);
+    for (const key of themeDescriptionKeys) {
+      expect(t('zh-TW', key)).toMatch(/[\u3400-\u9fff]/u);
+      expect(t('en', key)).not.toMatch(/[\u3400-\u9fff]/u);
+      expect(t('zh-TW', key)).not.toBe(t('en', key));
+    }
   });
 
   it('uses scene language throughout current public English copy', () => {

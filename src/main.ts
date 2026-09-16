@@ -124,6 +124,22 @@ function label(key: MessageKey): string {
   return t(locale, key);
 }
 
+const themeDescriptionKeys: Record<StudioThemeId, MessageKey> = {
+  sakura: 'sakuraDescription',
+  summer: 'summerDescription',
+  maple: 'mapleDescription',
+  ginkgo: 'ginkgoDescription',
+  snow: 'snowDescription',
+  sunset: 'sunsetDescription',
+  ocean: 'oceanDescription',
+  wanderer: 'wandererDescription',
+  kitty: 'kittyDescription',
+};
+
+function themeDescription(id: StudioThemeId): string {
+  return label(themeDescriptionKeys[id]);
+}
+
 function percentile(values: number[], value: number): number {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -136,7 +152,7 @@ function themeCards(): string {
     return `<button type="button" class="theme-card" data-theme="${id}" aria-pressed="${id === theme}"
       style="--card-dark:${palette.scanDark};--card-mid:${palette.mid};--card-bright:${palette.bright};--card-light:${palette.highlight}">
       <span class="theme-card-art" aria-hidden="true"><i></i><i></i><i></i><i></i><b>${palette.glyph}</b></span>
-      <span class="theme-card-copy"><strong data-theme-label="${id}">${label(id)}</strong><small>${palette.signature}</small></span>
+      <span class="theme-card-copy"><strong data-theme-label="${id}">${label(id)}</strong><small data-theme-description="${id}">${themeDescription(id)}</small></span>
       <span class="selected-check" aria-hidden="true">✓</span>
     </button>`;
   }).join('');
@@ -166,7 +182,7 @@ function appMarkup(): string {
           <header class="stage-heading">
             <p class="stage-eyebrow"><span class="live-dot" aria-hidden="true"></span> <span data-i18n="liveScene">${label('liveScene')}</span> · <span id="qr-size">${qr.size} × ${qr.size}</span></p>
             <h1 id="theme-title">${label(theme)}</h1>
-            <p id="theme-signature">${THEMES[theme].signature}</p>
+            <p id="theme-signature">${themeDescription(theme)}</p>
           </header>
           <div class="stage-tools">
             <div class="mode-switch" role="group" aria-label="View mode">
@@ -180,7 +196,7 @@ function appMarkup(): string {
 
         <aside class="grow-panel" aria-labelledby="controls-title">
           <div class="panel-intro">
-            <p class="panel-step">01 · CONTENT</p>
+            <p class="panel-step" data-i18n="contentStep">${label('contentStep')}</p>
             <h2 id="controls-title" data-i18n="controls">${label('controls')}</h2>
           </div>
 
@@ -207,7 +223,7 @@ function appMarkup(): string {
           </div>
 
           <section class="theme-library" aria-labelledby="theme-label">
-            <div class="library-heading"><span class="panel-step">02 · STYLE</span><h3 id="theme-label" data-i18n="themes">${label('themes')}</h3></div>
+            <div class="library-heading"><span class="panel-step" data-i18n="styleStep">${label('styleStep')}</span><h3 id="theme-label" data-i18n="themes">${label('themes')}</h3></div>
             <div class="theme-grid">${themeCards()}</div>
           </section>
 
@@ -321,7 +337,7 @@ function setTheme(value: string): void {
   savePreference('voxelqr-theme', theme);
   document.querySelectorAll<HTMLButtonElement>('[data-theme]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.theme === theme)));
   required<HTMLElement>('#theme-title').textContent = label(theme);
-  required<HTMLElement>('#theme-signature').textContent = THEMES[theme].signature;
+  required<HTMLElement>('#theme-signature').textContent = themeDescription(theme);
   garden.setTheme(theme);
   applyStageTheme();
 }
@@ -345,10 +361,13 @@ function setLocale(next: Locale): void {
     element.textContent = label(element.dataset.i18n as MessageKey);
   });
   STUDIO_THEME_IDS.forEach((id) => {
-    const element = document.querySelector<HTMLElement>(`[data-theme-label="${id}"]`);
-    if (element) element.textContent = label(id);
+    const nameElement = document.querySelector<HTMLElement>(`[data-theme-label="${id}"]`);
+    const descriptionElement = document.querySelector<HTMLElement>(`[data-theme-description="${id}"]`);
+    if (nameElement) nameElement.textContent = label(id);
+    if (descriptionElement) descriptionElement.textContent = themeDescription(id);
   });
   required<HTMLElement>('#theme-title').textContent = label(theme);
+  required<HTMLElement>('#theme-signature').textContent = themeDescription(theme);
   payloadInput.placeholder = payloadType === 'url' ? label('payloadHintUrl') : label('payloadHintText');
 }
 

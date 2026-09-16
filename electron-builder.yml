@@ -2,9 +2,9 @@ appId: app.voxelqr.studio
 productName: VoxelQR Studio
 copyright: Copyright © 2026 VoxelQR Studio contributors
 directories:
-  output: _workspace/build/v1.1.0-r6/windows
+  output: _workspace/build/v1.1.1/windows
 files:
-  - from: _workspace/build/v1.1.0-r6/desktop
+  - from: _workspace/build/v1.1.1/desktop
     to: build/desktop
   - from: electron
     to: electron

@@ -4,12 +4,12 @@ import { assertPathInside, resolveInsideProject, workspaceRoot } from './root-co
 
 const sources = [
   {
-    source: resolveInsideProject(path.join(workspaceRoot, 'build', 'v1.1.0-r6', 'single', 'index.html'), 'ACCEPTANCE_WEB_SOURCE'),
+    source: resolveInsideProject(path.join(workspaceRoot, 'build', 'v1.1.1', 'single', 'index.html'), 'ACCEPTANCE_WEB_SOURCE'),
     name: 'VoxelQR-Studio-Web.html',
     minimumBytes: 100_000,
   },
   {
-    source: resolveInsideProject(path.join(workspaceRoot, 'build', 'v1.1.0-r6', 'windows', 'VoxelQR-Studio.exe'), 'ACCEPTANCE_WINDOWS_SOURCE'),
+    source: resolveInsideProject(path.join(workspaceRoot, 'build', 'v1.1.1', 'windows', 'VoxelQR-Studio.exe'), 'ACCEPTANCE_WINDOWS_SOURCE'),
     name: 'VoxelQR-Studio.exe',
     minimumBytes: 10_000_000,
   },

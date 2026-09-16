@@ -227,7 +227,8 @@ try {
         assert(kittyScanZeroDiff.diff.exact && kittyScanZeroDiff.diff.fullFrameDifferentPixels === 0 && kittyScanZeroDiff.diff.qrRoiDifferentPixels === 0, `R6_EXPORT_ZERO_DIFF:${payloadCase.name}`);
         await setSceneAndWait(page);
         const restored = await page.evaluate(() => window.__VOXELQR_TEST__.getKittyMotionSample());
-        assert(exactRestoreKeys.every((key) => restored.lastRestore?.[key] === true), `R6_EXPORT_FINAL_RESTORE:${payloadCase.name}`);
+        const failedRestoreKeys = exactRestoreKeys.filter((key) => restored.lastRestore?.[key] !== true);
+        assert(failedRestoreKeys.length === 0, `R6_EXPORT_FINAL_RESTORE:${payloadCase.name}:${failedRestoreKeys.join(',')}`);
         kittyRestore = Object.fromEntries(exactRestoreKeys.map((key) => [key, restored.lastRestore[key]]));
       }
 

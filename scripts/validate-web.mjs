@@ -2,7 +2,7 @@ import { chromium } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  assert, buildRoot, cameraDistance, cameraStateDistance, canvasFrame, chromePath, createStaticServer, decodePng,
+  assert, assertVisibleLocaleCoherence, buildRoot, cameraDistance, cameraStateDistance, canvasFrame, chromePath, createStaticServer, decodePng,
   ensureEvidenceDirs, payloadCases, resourcesEqual, setPayloadAndWait, setScanAndWait,
   previewRoot, setSceneAndWait, sha256, themes, validationRoot, waitForGarden, writeEvidence,
 } from './validation-helpers.mjs';
@@ -370,20 +370,13 @@ try {
   await download.saveAs(downloadPath);
   assert(decodePng(await readFile(downloadPath)) === previewPayload, 'EXPORT_GATE: exported same-scene top view does not decode');
 
-  await page.evaluate(() => window.__VOXELQR_TEST__.setLocale('zh-TW'));
   await setSceneAndWait(page);
-  const zhPublicIdentity = await page.evaluate(() => ({
-    heading: document.querySelector('#controls-title')?.textContent?.trim(),
-    descriptor: document.querySelector('.brand small')?.textContent?.trim(),
-  }));
-  assert(zhPublicIdentity.heading === '3D 動態體素 QR Code 生成器' && zhPublicIdentity.descriptor === '3D 動態體素 QR Code 生成器', 'I18N_ZH_TW: exact public name mismatch');
+  const localeCoherence = await assertVisibleLocaleCoherence(page, { theme: 'kitty', mode: 'scene' });
+  const zhPublicIdentity = { heading: localeCoherence['zh-TW'].controls, descriptor: localeCoherence['zh-TW'].productName };
+  const enPublicIdentity = { displayName: 'VoxelQR Studio', descriptor: localeCoherence.en.productName };
+  await page.evaluate(() => window.__VOXELQR_TEST__.setLocale('zh-TW'));
   await page.screenshot({ path: path.join(previewRoot, `${String(themes.length * 2 + 6).padStart(2, '0')}-zh-TW-ui.png`) });
   await page.evaluate(() => window.__VOXELQR_TEST__.setLocale('en'));
-  const enPublicIdentity = await page.evaluate(() => ({
-    displayName: document.querySelector('.brand strong')?.textContent?.trim(),
-    descriptor: document.querySelector('.brand small')?.textContent?.trim(),
-  }));
-  assert(enPublicIdentity.displayName === 'VoxelQR Studio' && enPublicIdentity.descriptor === 'Dynamic 3D Voxel QR Code Generator', 'I18N_EN: Studio identity mismatch');
   await page.screenshot({ path: path.join(previewRoot, `${String(themes.length * 2 + 7).padStart(2, '0')}-en-ui.png`) });
   const namedButtons = await page.locator('button').evaluateAll((buttons) => buttons.every((button) => Boolean((button.getAttribute('aria-label') || button.textContent || '').trim())));
   assert(namedButtons, 'ACCESSIBILITY_GATE: unnamed button');
@@ -461,6 +454,8 @@ try {
     enPublicIdentity,
     I18N_ZH_TW_GATE: 'PASS',
     I18N_EN_GATE: 'PASS',
+    LOCALE_COHERENCE_GATE: 'PASS_EN_AND_ZH_TW_ALL_REQUIRED_VISIBLE_TEXT',
+    localeCoherence,
     ACCESSIBILITY_GATE: 'PASS',
     EXPORT_GATE: 'PASS',
     transitionSamples: transitionSamples.length,

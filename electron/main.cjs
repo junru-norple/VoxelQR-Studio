@@ -56,7 +56,7 @@ function createWindow() {
     : path.join(sourceRoot, '_workspace');
   const entryPoint = app.isPackaged
     ? path.join(__dirname, '..', 'build', 'desktop', 'index.html')
-    : path.join(developmentWorkspace, 'build', 'v1.1.0-r6', 'desktop', 'index.html');
+    : path.join(developmentWorkspace, 'build', 'v1.1.1', 'desktop', 'index.html');
   window.loadFile(entryPoint).catch((error) => console.error('WINDOW_LOAD_REJECTED', error));
 }
 

@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  acceptanceRoot, assert, buildRoot, canvasFrame, chromePath, decodePng, ensureEvidenceDirs,
-  setPayloadAndWait, setScanAndWait, themes, waitForGarden, writeEvidence,
+  assert, assertVisibleLocaleCoherence, buildRoot, canvasFrame, chromePath, decodePng, ensureEvidenceDirs,
+  setPayloadAndWait, setScanAndWait, setSceneAndWait, themes, waitForGarden, writeEvidence,
 } from './validation-helpers.mjs';
 
 const browser = await chromium.launch({ headless: true, executablePath: chromePath, args: ['--disable-gpu-sandbox', '--allow-file-access-from-files'] });
@@ -17,10 +17,9 @@ page.on('request', (request) => {
   if (protocol === 'http:' || protocol === 'https:') networkRequests.push(request.url());
 });
 page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
-const acceptanceHtml = path.join(acceptanceRoot, 'VoxelQR-Studio-Web.html');
-const buildHtml = path.join(buildRoot, 'single', 'index.html');
-const singlePath = existsSync(acceptanceHtml) ? acceptanceHtml : buildHtml;
-const singleSource = singlePath === acceptanceHtml ? 'acceptance' : 'r6-build';
+const singlePath = path.join(buildRoot, 'single', 'index.html');
+assert(existsSync(singlePath), 'WEB_SINGLE_HTML_FRESH_BUILD_MISSING');
+const singleSource = 'v1.1.1-build';
 const fileUrl = pathToFileURL(singlePath).href;
 await page.goto(fileUrl, { waitUntil: 'load' });
 await waitForGarden(page);
@@ -41,6 +40,8 @@ for (const theme of themes) {
   const stats = await page.evaluate(() => window.__VOXELQR_TEST__.getStats());
   themeMetrics.push({ theme, detail: stats.visual.v8.detail, heroResolutionPreserved: stats.performance.heroResolutionPreserved, qrResolutionPreserved: stats.performance.qrResolutionPreserved });
 }
+await setSceneAndWait(page);
+const localeCoherence = await assertVisibleLocaleCoherence(page, { theme: 'kitty', mode: 'scene' });
 assert(networkRequests.length === 0, `WEB_OFFLINE_FILE: unexpected network ${networkRequests.join(', ')}`);
 assert(consoleErrors.length === 0, `WEB_SINGLE_HTML console errors: ${consoleErrors.join(' | ')}`);
 const result = {
@@ -49,11 +50,11 @@ const result = {
   WEB_SINGLE_HTML_NO_OVERLAY_GATE: 'PASS',
   WEB_SINGLE_HTML_LIVE_INPUT_GATE: 'PASS',
   WEB_SINGLE_HTML_BRAND_GATE: 'PASS_EXACT_VOXELQR_STUDIO',
+  WEB_SINGLE_HTML_LOCALE_COHERENCE_GATE: 'PASS_EN_AND_ZH_TW_ALL_REQUIRED_VISIBLE_TEXT',
+  localeCoherence,
   WEB_OFFLINE_FILE_GATE: 'PASS_0_REQUESTS',
   WEB_SINGLE_HTML_QR_RUNTIME_GATE: `PASS_${themes.length}_OF_${themes.length}`,
-  WEB_SINGLE_HTML_SOURCE_GATE: singleSource === 'acceptance'
-    ? 'PASS_DIRECT_ACCEPTANCE_HTML'
-    : 'PASS_PROJECT_CONTAINED_R6_BUILD_HTML_PRE_ACCEPTANCE',
+  WEB_SINGLE_HTML_SOURCE_GATE: 'PASS_PROJECT_CONTAINED_V1_1_1_BUILD_HTML_PRE_ACCEPTANCE',
   singleSource,
   WEB_SINGLE_HTML_COLD_OPEN_PATH: fileUrl,
   themeMetrics,

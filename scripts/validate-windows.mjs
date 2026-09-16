@@ -6,14 +6,13 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import {
-  acceptanceRoot, assert, buildRoot, canvasFrame, decodePng, ensureEvidenceDirs, previewRoot,
-  setPayloadAndWait, setScanAndWait, themes, validationRoot, waitForGarden, writeEvidence,
+  assert, assertVisibleLocaleCoherence, buildRoot, canvasFrame, decodePng, ensureEvidenceDirs, previewRoot,
+  setPayloadAndWait, setScanAndWait, setSceneAndWait, themes, validationRoot, waitForGarden, writeEvidence,
 } from './validation-helpers.mjs';
 
-const acceptanceExecutable = path.join(acceptanceRoot, 'VoxelQR-Studio.exe');
-const buildExecutable = path.join(buildRoot, 'windows', 'VoxelQR-Studio.exe');
-const executablePath = existsSync(acceptanceExecutable) ? acceptanceExecutable : buildExecutable;
-const executableSource = executablePath === acceptanceExecutable ? 'acceptance' : 'r6-build';
+const executablePath = path.join(buildRoot, 'windows', 'VoxelQR-Studio.exe');
+assert(existsSync(executablePath), 'WINDOWS_RUNTIME_FRESH_BUILD_MISSING');
+const executableSource = 'v1.1.1-build';
 const profileBase = path.join(validationRoot, 'runtime-profiles');
 await mkdir(profileBase, { recursive: true });
 const profileRoot = await mkdtemp(path.join(profileBase, 'windows-portable-'));
@@ -142,6 +141,12 @@ const portableProcess = spawn(
     `--disk-cache-dir=${cacheRoot}`,
     `--data-path=${dataRoot}`,
     '--no-first-run',
+    '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader',
+    '--disable-gpu-sandbox',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
   ],
   { cwd: validationRoot, env: process.env, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true },
 );
@@ -164,6 +169,7 @@ try {
   const context = browser.contexts()[0];
   assert(context, 'WINDOWS_RUNTIME: CDP returned no browser context');
   page = await waitForApplicationPage(context, startupDiagnostics);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const externalRequests = [];
   const consoleErrors = [];
   page.on('request', (request) => {
@@ -196,7 +202,9 @@ try {
       qrResolutionPreserved: stats.performance.qrResolutionPreserved,
     });
   }
-  await page.evaluate(() => { window.__VOXELQR_TEST__.setTheme('sakura'); window.__VOXELQR_TEST__.setMode('scene'); });
+  await setSceneAndWait(page);
+  const localeCoherence = await assertVisibleLocaleCoherence(page, { theme: 'kitty', mode: 'scene' });
+  await page.evaluate(() => { window.__VOXELQR_TEST__.setTheme('sakura'); window.__VOXELQR_TEST__.setLocale('en'); window.__VOXELQR_TEST__.setMode('scene'); });
   await page.waitForTimeout(1600);
   await page.screenshot({ path: path.join(previewRoot, '23-windows-sakura.png') });
   assert(externalRequests.length === 0, `WINDOWS_OFFLINE: unexpected network ${externalRequests.join(', ')}`);
@@ -207,9 +215,9 @@ try {
     WINDOWS_NO_QR_OVERLAY_GATE: 'PASS',
     WINDOWS_LIVE_INPUT_GATE: 'PASS',
     WINDOWS_BRAND_GATE: 'PASS_EXACT_VOXELQR_STUDIO',
-    WINDOWS_PORTABLE_SOURCE_GATE: executableSource === 'acceptance'
-      ? 'PASS_DIRECT_ACCEPTANCE_EXE'
-      : 'PASS_PROJECT_CONTAINED_R6_BUILD_EXE_PRE_ACCEPTANCE',
+    WINDOWS_LOCALE_COHERENCE_GATE: 'PASS_EN_AND_ZH_TW_ALL_REQUIRED_VISIBLE_TEXT',
+    localeCoherence,
+    WINDOWS_PORTABLE_SOURCE_GATE: 'PASS_PROJECT_CONTAINED_V1_1_1_BUILD_EXE_PRE_ACCEPTANCE',
     executableSource,
     WINDOWS_QR_RUNTIME_GATE: `PASS_${themes.length}_OF_${themes.length}`,
     WINDOWS_OFFLINE_GATE: 'PASS_0_REQUESTS',

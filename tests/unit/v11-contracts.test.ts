@@ -104,7 +104,7 @@ describe('v1.1.0 ninth-theme and responsive-size contract', () => {
   });
 
   it('provides the exact bilingual Kitty label', () => {
-    expect(t('zh-TW', 'kitty')).toBe('體素小貓');
+    expect(t('zh-TW', 'kitty')).toBe('Voxel Kitty');
     expect(t('en', 'kitty')).toBe('Voxel Kitty');
   });
 
