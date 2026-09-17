@@ -1,0 +1,51 @@
+# VoxelQR Studio text and binary policy (Phase 0-B)
+.gitattributes text eol=lf
+.gitignore text eol=lf
+LICENSE text eol=lf
+
+# Source, configuration, documentation, and checksums use LF.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.sha256 text eol=lf
+*.sh text eol=lf
+
+# Native Windows command scripts require CRLF. No PowerShell rule is added
+# because the formal source currently contains no .ps1 file requiring it.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets and packages must never be line-ending transformed.
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.webp -text
+*.avif -text
+*.bmp -text
+*.ico -text
+*.woff -text
+*.woff2 -text
+*.ttf -text
+*.otf -text
+*.eot -text
+*.zip -text
+*.7z -text
+*.gz -text
+*.tar -text
+*.exe -text
+*.dll -text
+*.pdb -text
+*.sqlite -text
+*.sqlite3 -text
+*.db -text
+*.pdf -text

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultBom": "none",
+  "defaultFinalNewline": true,
+  "exceptions": [
+    { "path": "CHANGELOG.md", "finalNewline": false },
+    { "path": "README.md", "finalNewline": false },
+    { "path": "README_FIRST.txt", "finalNewline": false },
+    { "path": "RELEASE_NOTES_v1.1.1.md", "finalNewline": false },
+    { "path": "docs/ARCHITECTURE.md", "finalNewline": false },
+    { "path": "docs/DESIGN.md", "finalNewline": false },
+    { "path": "docs/QR_PIPELINE.md", "finalNewline": false },
+    { "path": "docs/RELEASE_VALIDATION.md", "finalNewline": false },
+    { "path": "docs/SECURITY.md", "finalNewline": false },
+    { "path": "docs/TESTING.md", "finalNewline": false },
+    { "path": "tests/unit/i18n.test.ts", "finalNewline": false },
+    { "path": "tests/unit/public-copy.test.ts", "finalNewline": false }
+  ]
+}
