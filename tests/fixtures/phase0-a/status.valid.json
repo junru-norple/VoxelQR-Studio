@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "workPackage": "SANITIZED_FIXTURE",
+  "formalRepositoryContentWrite": false,
+  "gitIndexMetadataWrite": false,
+  "gitHistoryOrRefsWrite": false,
+  "remoteWrite": false,
+  "verified": true,
+  "humanAccepted": false,
+  "packaged": false,
+  "synced": false,
+  "pushed": false,
+  "tagged": false,
+  "released": false,
+  "evidenceReferences": ["evidence/review.txt"]
+}

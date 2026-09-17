@@ -29,7 +29,9 @@
     "validate:docs": "vitest run tests/unit/public-copy.test.ts tests/unit/i18n.test.ts",
     "audit:licenses": "node scripts/license-audit.mjs",
     "validate:root-containment": "vitest run tests/root-containment.test.mjs",
-    "validate:all": "npm run validate:root-containment && npm run lint && npm run typecheck && npm test && npm run build:web && npm run build:acceptance && npm run validate:web && npm run validate:motion && npm run validate:export && npm run validate:single && npm run validate:windows && npm run audit:licenses"
+    "validate:all": "npm run validate:root-containment && npm run lint && npm run typecheck && npm test && npm run build:web && npm run build:acceptance && npm run validate:web && npm run validate:motion && npm run validate:export && npm run validate:single && npm run validate:windows && npm run audit:licenses",
+    "validate:phase0-a": "node scripts/phase0-a/validate-candidate.mjs && vitest run tests/phase0-a-contracts.test.mjs",
+    "validate:phase0-a:live": "node scripts/phase0-a/public-release-verifier.mjs --config config/phase0-a/public-v1.1.1-release.json"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

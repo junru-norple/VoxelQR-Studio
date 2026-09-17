@@ -1,0 +1,14 @@
+[
+  { "id": "r3", "text": "Internal R3 review notes." },
+  { "id": "r6", "text": "Accepted R6 appearance." },
+  { "id": "candidate", "text": "This is the current v1.1.1 candidate." },
+  { "id": "acceptance", "text": "Human acceptance review state." },
+  { "id": "rabbit-en-dash", "text": "Pixel Wanderer occupies 28–35%." },
+  { "id": "rabbit-ascii", "text": "Pixel Wanderer occupies 28%-35%." },
+  { "id": "kitty-fullwidth", "text": "體素小貓約佔 8％～12％。" },
+  { "id": "summer", "text": "Summer tree" },
+  { "id": "snow", "text": "Snow tree" },
+  { "id": "ocean-case", "text": "Ocean waves" },
+  { "id": "old-image", "text": "docs/assets/v1.0.0/old-scene.png" },
+  { "id": "zh-candidate", "text": "目前 v1.1.1 候選與人工驗收紀錄。" }
+]

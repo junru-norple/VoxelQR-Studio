@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0.0",
+  "repository": { "owner": "junru-norple", "name": "VoxelQR-Studio" },
+  "version": "v1.1.1",
+  "tag": "v1.1.1",
+  "expectedTarget": { "branch": "main", "commit": "a8175636316fc191c1c1cdd635299d0c01a1e31a" },
+  "expectedReleaseTitle": "VoxelQR Studio v1.1.1 — Bilingual Documentation and Locale-Coherent Showcase",
+  "expectedReleaseState": { "draft": false, "prerelease": false },
+  "requiredReleaseNoteMarkers": [
+    "VoxelQR Studio v1.1.1 refines public documentation",
+    "VoxelQR Studio v1.1.1 改善公開文件"
+  ],
+  "expectedManagedAssets": [
+    {
+      "name": "VoxelQR-Studio-v1.1.1.zip",
+      "bytes": 89984453,
+      "sha256": "bf528534cdda68b1462d620858bf07c6f92f6516d1fa239df4f8e08407d380b0"
+    },
+    {
+      "name": "VoxelQR-Studio-v1.1.1.zip.sha256",
+      "bytes": 92,
+      "sha256": "218833ff71e5c5193b2c48592138a9459b950fd3eb6a582eb65560ca564c8494"
+    }
+  ],
+  "expectedChecksum": {
+    "assetName": "VoxelQR-Studio-v1.1.1.zip.sha256",
+    "targetAssetName": "VoxelQR-Studio-v1.1.1.zip"
+  },
+  "expectedReadme": {
+    "path": "README.md",
+    "requiredImageReferences": [
+      "docs/assets/v1.1.1/pixel-wanderer-scene.en.png",
+      "docs/assets/v1.1.1/pixel-wanderer-scene.zh-TW.png",
+      "docs/assets/v1.1.1/voxel-kitty-scene.en.png",
+      "docs/assets/v1.1.1/voxel-kitty-scene.zh-TW.png",
+      "docs/assets/v1.1.1/scan-view.en.png",
+      "docs/assets/v1.1.1/scan-view.zh-TW.png"
+    ]
+  },
+  "expectedLatest": true,
+  "expectedAutomaticSourceArchiveCount": 2
+}

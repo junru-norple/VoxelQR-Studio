@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/junru-norple/VoxelQR-Studio/schemas/phase0-a/status.schema.json",
+  "title": "VoxelQR Studio fixed work-package status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "workPackage", "formalRepositoryContentWrite", "gitIndexMetadataWrite",
+    "gitHistoryOrRefsWrite", "remoteWrite", "verified", "humanAccepted", "packaged",
+    "synced", "pushed", "tagged", "released", "evidenceReferences"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "workPackage": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+    "formalRepositoryContentWrite": { "$ref": "#/$defs/state" },
+    "gitIndexMetadataWrite": { "$ref": "#/$defs/state" },
+    "gitHistoryOrRefsWrite": { "$ref": "#/$defs/state" },
+    "remoteWrite": { "$ref": "#/$defs/state" },
+    "verified": { "$ref": "#/$defs/state" },
+    "humanAccepted": { "$ref": "#/$defs/state" },
+    "packaged": { "$ref": "#/$defs/state" },
+    "synced": { "$ref": "#/$defs/state" },
+    "pushed": { "$ref": "#/$defs/state" },
+    "tagged": { "$ref": "#/$defs/state" },
+    "released": { "$ref": "#/$defs/state" },
+    "evidenceReferences": { "type": "array", "items": { "$ref": "#/$defs/relativePath" }, "uniqueItems": true }
+  },
+  "$defs": {
+    "state": { "enum": [true, false, "unknown"] },
+    "relativePath": { "type": "string", "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$" }
+  }
+}

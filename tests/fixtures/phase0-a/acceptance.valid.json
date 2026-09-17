@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0.0",
+  "productVersion": "v9.9.9",
+  "acceptanceId": "sanitized-fixture-pair",
+  "artifacts": [
+    {
+      "productVersion": "v9.9.9",
+      "relativePath": "artifacts/artifact.en.txt",
+      "bytes": 18,
+      "sha256": "df743b76cdb217cd9c1dfd3bd33966b31daa61df879d34b3eb00c63053391035",
+      "acceptanceScope": ["automation-contract"],
+      "evaluatorRole": "automated-validator",
+      "acceptanceStatus": "pending",
+      "frozen": false,
+      "evidenceReference": "evidence/review.txt",
+      "dependencies": [
+        {
+          "kind": "input",
+          "relativePath": "inputs/dependency.txt",
+          "bytes": 18,
+          "sha256": "b2178c82faf79d141493834a5e8771c46e077b8b9012673d798fdc2227bc335c"
+        }
+      ],
+      "invalidationConditions": ["artifact bytes change", "dependency fingerprint changes"],
+      "pairedImage": {
+        "pairId": "fixture-pair",
+        "locale": "en",
+        "payload": "fixture-payload",
+        "viewport": { "width": 10, "height": 10 },
+        "applicationState": { "mode": "fixture" },
+        "camera": { "view": "fixture" },
+        "composition": { "layout": "fixture" }
+      }
+    },
+    {
+      "productVersion": "v9.9.9",
+      "relativePath": "artifacts/artifact.zh-TW.txt",
+      "bytes": 21,
+      "sha256": "ba0dbfb10b0e9b170f5b809a0d82cc27fec0c3a06f87bbfa6840fa48e06a7b5c",
+      "acceptanceScope": ["automation-contract"],
+      "evaluatorRole": "automated-validator",
+      "acceptanceStatus": "pending",
+      "frozen": false,
+      "evidenceReference": "evidence/review.txt",
+      "dependencies": [
+        {
+          "kind": "input",
+          "relativePath": "inputs/dependency.txt",
+          "bytes": 18,
+          "sha256": "b2178c82faf79d141493834a5e8771c46e077b8b9012673d798fdc2227bc335c"
+        }
+      ],
+      "invalidationConditions": ["artifact bytes change", "dependency fingerprint changes"],
+      "pairedImage": {
+        "pairId": "fixture-pair",
+        "locale": "zh-TW",
+        "payload": "fixture-payload",
+        "viewport": { "width": 10, "height": 10 },
+        "applicationState": { "mode": "fixture" },
+        "camera": { "view": "fixture" },
+        "composition": { "layout": "fixture" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/junru-norple/VoxelQR-Studio/schemas/phase0-a/showcase-manifest.schema.json",
+  "title": "VoxelQR Studio locale-paired showcase captures",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "productVersion", "captures"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "productVersion": { "type": "string" },
+    "captures": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "#/$defs/capture" } }
+  },
+  "$defs": {
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairId", "version", "theme", "locale", "relativePath", "bytes", "sha256", "payload",
+        "viewport", "applicationState", "camera", "composition", "captureSource"
+      ],
+      "properties": {
+        "pairId": { "enum": ["pixel-wanderer-scene", "voxel-kitty-scene", "scan-view"] },
+        "version": { "type": "string" },
+        "theme": { "type": "string" },
+        "locale": { "enum": ["en", "zh-TW"] },
+        "relativePath": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "payload": { "type": "string" },
+        "viewport": { "type": "object" },
+        "applicationState": { "type": "object" },
+        "camera": { "type": "object" },
+        "composition": { "type": "object" },
+        "captureSource": { "type": "object" },
+        "scan": {
+          "type": "object", "additionalProperties": false,
+          "required": ["topDown", "decodedPayload"],
+          "properties": { "topDown": { "const": true }, "decodedPayload": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

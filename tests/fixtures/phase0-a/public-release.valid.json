@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0.0",
+  "repository": { "owner": "fixture-owner", "name": "fixture-repository" },
+  "version": "v9.9.9",
+  "tag": "v9.9.9",
+  "expectedTarget": { "branch": "main", "commit": "1111111111111111111111111111111111111111" },
+  "expectedReleaseTitle": "Fixture Release",
+  "expectedReleaseState": { "draft": false, "prerelease": false },
+  "requiredReleaseNoteMarkers": ["English marker", "繁體中文標記"],
+  "expectedManagedAssets": [
+    {
+      "name": "archive.zip",
+      "bytes": 16,
+      "sha256": "b82d14bd3717287c78a2e1351107a49a925192cae59c0f844437eed8a0d6caef"
+    },
+    {
+      "name": "archive.zip.sha256",
+      "bytes": 78,
+      "sha256": "501ea4a96693a95496b08bbacf72ee01248cd0e904053f1e2659f19c33b5a547"
+    }
+  ],
+  "expectedChecksum": { "assetName": "archive.zip.sha256", "targetAssetName": "archive.zip" },
+  "expectedReadme": { "path": "README.md", "requiredImageReferences": ["docs/image.png"] },
+  "expectedLatest": true,
+  "expectedAutomaticSourceArchiveCount": 2
+}

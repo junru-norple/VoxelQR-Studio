@@ -1,0 +1,160 @@
+{
+  "schemaVersion": "1.0.0",
+  "productVersion": "v1.1.1",
+  "captures": [
+    {
+      "pairId": "pixel-wanderer-scene",
+      "version": "v1.1.1",
+      "theme": "wanderer",
+      "locale": "en",
+      "relativePath": "docs/assets/v1.1.1/pixel-wanderer-scene.en.png",
+      "bytes": 563917,
+      "sha256": "fdc7dbed0e9b9f1b0d12c798ddac40f392762bd2a463cd583ccc7b4253589ce8",
+      "payload": "https://example.com/voxelqr-studio/v1.1.1",
+      "viewport": { "width": 1440, "height": 900 },
+      "applicationState": { "theme": "wanderer", "mode": "scene", "transitionProgress": 0, "animationTimeSeconds": 4.25 },
+      "camera": {
+        "projection": "orthographic",
+        "position": [-23.214567132156677, 16.148977115577487, 46.028986765509345],
+        "quaternion": [-0.007405268654424645, -0.23177188033967483, -0.034744169394076395, 0.9721212888179556],
+        "up": [0.07098375954147072, 0.9974760093785431, 0.0017078043258455591],
+        "target": [0, 14.575757575757574, 0],
+        "zoom": 1.1681249999999999
+      },
+      "composition": {
+        "view": "front-three-quarter",
+        "canvas": { "width": 1020, "height": 828 },
+        "projectedHeroToQrRatio": 0.426635,
+        "visibleFeatures": ["face", "eyes", "nose-and-mouth", "ears", "body-depth", "limbs", "full-scarf", "side-knot", "two-short-ends", "qr-board"]
+      },
+      "captureSource": { "kind": "actual-application", "runtime": "web", "productVersion": "v1.1.1", "sourceCommit": "a8175636316fc191c1c1cdd635299d0c01a1e31a", "synthetic": false }
+    },
+    {
+      "pairId": "pixel-wanderer-scene",
+      "version": "v1.1.1",
+      "theme": "wanderer",
+      "locale": "zh-TW",
+      "relativePath": "docs/assets/v1.1.1/pixel-wanderer-scene.zh-TW.png",
+      "bytes": 572504,
+      "sha256": "2c9efc70c31858a0866c102b949795e23bae5340385dbca9dc228cc7567dc89d",
+      "payload": "https://example.com/voxelqr-studio/v1.1.1",
+      "viewport": { "width": 1440, "height": 900 },
+      "applicationState": { "theme": "wanderer", "mode": "scene", "transitionProgress": 0, "animationTimeSeconds": 4.25 },
+      "camera": {
+        "projection": "orthographic",
+        "position": [-23.214567132156677, 16.148977115577487, 46.028986765509345],
+        "quaternion": [-0.007405268654424645, -0.23177188033967483, -0.034744169394076395, 0.9721212888179556],
+        "up": [0.07098375954147072, 0.9974760093785431, 0.0017078043258455591],
+        "target": [0, 14.575757575757574, 0],
+        "zoom": 1.1681249999999999
+      },
+      "composition": {
+        "view": "front-three-quarter",
+        "canvas": { "width": 1020, "height": 828 },
+        "projectedHeroToQrRatio": 0.426635,
+        "visibleFeatures": ["face", "eyes", "nose-and-mouth", "ears", "body-depth", "limbs", "full-scarf", "side-knot", "two-short-ends", "qr-board"]
+      },
+      "captureSource": { "kind": "actual-application", "runtime": "web", "productVersion": "v1.1.1", "sourceCommit": "a8175636316fc191c1c1cdd635299d0c01a1e31a", "synthetic": false }
+    },
+    {
+      "pairId": "voxel-kitty-scene",
+      "version": "v1.1.1",
+      "theme": "kitty",
+      "locale": "en",
+      "relativePath": "docs/assets/v1.1.1/voxel-kitty-scene.en.png",
+      "bytes": 527352,
+      "sha256": "f9998464788be777300102339c2d3b11abdf01c8fc8ad6d098e62052b6c31c5d",
+      "payload": "https://example.com/voxelqr-studio/v1.1.1",
+      "viewport": { "width": 1440, "height": 900 },
+      "applicationState": { "theme": "kitty", "mode": "scene", "transitionProgress": 0, "animationTimeSeconds": 101.25, "motionSeed": "v111-public-kitty-indigo-comet", "action": "walk", "headingRadians": 0.783446, "renderVisible": true, "scanHidden": false },
+      "camera": {
+        "projection": "orthographic",
+        "position": [0, 4.446131986146302, 50.487804878048784],
+        "quaternion": [0, 0, 0, 1],
+        "up": [0, 1, 0],
+        "target": [0, 13.170731707317074, 0],
+        "zoom": 3.328918138260693
+      },
+      "composition": {
+        "view": "front-three-quarter",
+        "canvas": { "width": 1020, "height": 828 },
+        "projectedHeroToQrRatio": 0.144541,
+        "visibleFeatures": ["face", "ears", "chest", "body-depth", "short-legs", "raised-separated-tail", "qr-board"]
+      },
+      "captureSource": { "kind": "actual-application", "runtime": "web", "productVersion": "v1.1.1", "sourceCommit": "a8175636316fc191c1c1cdd635299d0c01a1e31a", "synthetic": false }
+    },
+    {
+      "pairId": "voxel-kitty-scene",
+      "version": "v1.1.1",
+      "theme": "kitty",
+      "locale": "zh-TW",
+      "relativePath": "docs/assets/v1.1.1/voxel-kitty-scene.zh-TW.png",
+      "bytes": 532026,
+      "sha256": "0de352144ac984cc3a72418f2272a426921f388f32310321ef3d5e6a5dfa5ad6",
+      "payload": "https://example.com/voxelqr-studio/v1.1.1",
+      "viewport": { "width": 1440, "height": 900 },
+      "applicationState": { "theme": "kitty", "mode": "scene", "transitionProgress": 0, "animationTimeSeconds": 101.25, "motionSeed": "v111-public-kitty-indigo-comet", "action": "walk", "headingRadians": 0.783446, "renderVisible": true, "scanHidden": false },
+      "camera": {
+        "projection": "orthographic",
+        "position": [0, 4.446131986146302, 50.487804878048784],
+        "quaternion": [0, 0, 0, 1],
+        "up": [0, 1, 0],
+        "target": [0, 13.170731707317074, 0],
+        "zoom": 3.328918138260693
+      },
+      "composition": {
+        "view": "front-three-quarter",
+        "canvas": { "width": 1020, "height": 828 },
+        "projectedHeroToQrRatio": 0.144541,
+        "visibleFeatures": ["face", "ears", "chest", "body-depth", "short-legs", "raised-separated-tail", "qr-board"]
+      },
+      "captureSource": { "kind": "actual-application", "runtime": "web", "productVersion": "v1.1.1", "sourceCommit": "a8175636316fc191c1c1cdd635299d0c01a1e31a", "synthetic": false }
+    },
+    {
+      "pairId": "scan-view",
+      "version": "v1.1.1",
+      "theme": "sunset",
+      "locale": "en",
+      "relativePath": "docs/assets/v1.1.1/scan-view.en.png",
+      "bytes": 488236,
+      "sha256": "167bb8e85ee1bd5cf463b76bedd1278ac929b9c2fd1fee56b4883e3799fa3bff",
+      "payload": "https://example.com/voxelqr-studio/v1.1.1",
+      "viewport": { "width": 1440, "height": 900 },
+      "applicationState": { "theme": "sunset", "mode": "scan", "transitionProgress": 1, "animationTimeSeconds": 7.25 },
+      "camera": {
+        "projection": "orthographic",
+        "position": [0, 110, 0],
+        "quaternion": [-0.7071067811865475, 0, 0, 0.7071067811865476],
+        "up": [0, 1, 0],
+        "target": [0, 0, 0],
+        "zoom": 0.631578947368421
+      },
+      "composition": { "view": "complete-top-down", "completeQr": true, "finderPatternsVisible": true, "quietZoneVisible": true, "overlayQr": false },
+      "captureSource": { "kind": "actual-application", "runtime": "web", "productVersion": "v1.1.1", "sourceCommit": "a8175636316fc191c1c1cdd635299d0c01a1e31a", "synthetic": false },
+      "scan": { "topDown": true, "decodedPayload": "https://example.com/voxelqr-studio/v1.1.1" }
+    },
+    {
+      "pairId": "scan-view",
+      "version": "v1.1.1",
+      "theme": "sunset",
+      "locale": "zh-TW",
+      "relativePath": "docs/assets/v1.1.1/scan-view.zh-TW.png",
+      "bytes": 494577,
+      "sha256": "3bb3f4934b9b94c416f01d52a88bd971863b6baca2c7c1fe43f9987181b32f2e",
+      "payload": "https://example.com/voxelqr-studio/v1.1.1",
+      "viewport": { "width": 1440, "height": 900 },
+      "applicationState": { "theme": "sunset", "mode": "scan", "transitionProgress": 1, "animationTimeSeconds": 7.25 },
+      "camera": {
+        "projection": "orthographic",
+        "position": [0, 110, 0],
+        "quaternion": [-0.7071067811865475, 0, 0, 0.7071067811865476],
+        "up": [0, 1, 0],
+        "target": [0, 0, 0],
+        "zoom": 0.631578947368421
+      },
+      "composition": { "view": "complete-top-down", "completeQr": true, "finderPatternsVisible": true, "quietZoneVisible": true, "overlayQr": false },
+      "captureSource": { "kind": "actual-application", "runtime": "web", "productVersion": "v1.1.1", "sourceCommit": "a8175636316fc191c1c1cdd635299d0c01a1e31a", "synthetic": false },
+      "scan": { "topDown": true, "decodedPayload": "https://example.com/voxelqr-studio/v1.1.1" }
+    }
+  ]
+}

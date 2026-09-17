@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/junru-norple/VoxelQR-Studio/schemas/phase0-a/human-acceptance.schema.json",
+  "title": "VoxelQR Studio scoped human acceptance manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "productVersion", "acceptanceId", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "productVersion": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "acceptanceId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$" },
+    "artifacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } }
+  },
+  "$defs": {
+    "relativePath": { "type": "string", "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$" },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "relativePath", "bytes", "sha256"],
+      "properties": {
+        "kind": { "enum": ["input", "tool", "source", "schema"] },
+        "relativePath": { "$ref": "#/$defs/relativePath" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "pairedImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pairId", "locale", "payload", "viewport", "applicationState", "camera", "composition"],
+      "properties": {
+        "pairId": { "type": "string", "minLength": 1 },
+        "locale": { "enum": ["en", "zh-TW"] },
+        "payload": { "type": "string" },
+        "viewport": { "type": "object" },
+        "applicationState": { "type": "object" },
+        "camera": { "type": "object" },
+        "composition": { "type": "object" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productVersion", "relativePath", "bytes", "sha256", "acceptanceScope", "evaluatorRole",
+        "acceptanceStatus", "frozen", "evidenceReference", "dependencies", "invalidationConditions"
+      ],
+      "properties": {
+        "productVersion": { "type": "string" },
+        "relativePath": { "$ref": "#/$defs/relativePath" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "acceptanceScope": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["visual-composition", "public-copy", "runtime-behavior", "release-artifact", "automation-contract"] }
+        },
+        "evaluatorRole": { "enum": ["human-user", "automated-validator", "release-manager"] },
+        "acceptanceStatus": { "enum": ["pending", "accepted", "rejected"] },
+        "frozen": { "type": "boolean" },
+        "evidenceReference": { "$ref": "#/$defs/relativePath" },
+        "dependencies": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fingerprint" } },
+        "invalidationConditions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "pairedImage": { "$ref": "#/$defs/pairedImage" }
+      }
+    }
+  }
+}
